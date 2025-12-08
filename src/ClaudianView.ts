@@ -148,6 +148,14 @@ export class ClaudianView extends ItemView {
       this.historyDropdown?.removeClass('visible');
     });
 
+    // Document-level ESC handler for cancel streaming (works regardless of focus)
+    this.registerDomEvent(document, 'keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && this.isStreaming) {
+        e.preventDefault();
+        this.cancelStreaming();
+      }
+    });
+
     // New conversation button
     const newBtn = headerActions.createDiv({ cls: 'claudian-header-btn' });
     setIcon(newBtn, 'plus');
