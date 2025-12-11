@@ -500,14 +500,14 @@ export class ClaudianView extends ItemView {
               todoEl.dataset.toolId = chunk.id;
               this.toolCallElements.set(chunk.id, todoEl);
             } else {
-              renderToolCall(this.currentContentEl!, toolCall, this.toolCallElements);
+              renderToolCall(this.currentContentEl!, toolCall, this.toolCallElements, this.plugin.settings.toolCallExpandedByDefault);
             }
           } else if (chunk.name === 'Write' || chunk.name === 'Edit') {
             const state = createWriteEditBlock(this.currentContentEl!, toolCall);
             this.writeEditStates.set(chunk.id, state);
             this.toolCallElements.set(chunk.id, state.wrapperEl);
           } else {
-            renderToolCall(this.currentContentEl!, toolCall, this.toolCallElements);
+            renderToolCall(this.currentContentEl!, toolCall, this.toolCallElements, this.plugin.settings.toolCallExpandedByDefault);
           }
         }
         break;

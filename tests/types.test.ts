@@ -63,6 +63,10 @@ describe('types.ts', () => {
     it('should have lastCustomModel as empty string by default', () => {
       expect(DEFAULT_SETTINGS.lastCustomModel).toBe('');
     });
+
+    it('should have toolCallExpandedByDefault set to false by default', () => {
+      expect(DEFAULT_SETTINGS.toolCallExpandedByDefault).toBe(false);
+    });
   });
 
   describe('ClaudianSettings type', () => {
@@ -71,13 +75,16 @@ describe('types.ts', () => {
         enableBlocklist: false,
         blockedCommands: ['test'],
         showToolUse: false,
+        toolCallExpandedByDefault: true,
         model: 'claude-haiku-4-5',
         thinkingBudget: 'off',
         permissionMode: 'yolo',
         approvedActions: [],
         excludedTags: [],
+        mediaFolder: '',
         environmentVariables: '',
         envSnippets: [],
+        systemPrompt: '',
       };
 
       expect(settings.enableBlocklist).toBe(false);
@@ -91,13 +98,16 @@ describe('types.ts', () => {
         enableBlocklist: true,
         blockedCommands: [],
         showToolUse: true,
+        toolCallExpandedByDefault: true,
         model: 'anthropic/custom-model-v1',
         thinkingBudget: 'medium',
         permissionMode: 'normal',
         approvedActions: [],
         excludedTags: ['private'],
+        mediaFolder: 'attachments',
         environmentVariables: 'API_KEY=test',
         envSnippets: [],
+        systemPrompt: '',
       };
 
       expect(settings.model).toBe('anthropic/custom-model-v1');
@@ -108,6 +118,7 @@ describe('types.ts', () => {
         enableBlocklist: true,
         blockedCommands: [],
         showToolUse: true,
+        toolCallExpandedByDefault: false,
         model: 'claude-sonnet-4-5',
         lastClaudeModel: 'claude-opus-4-5',
         lastCustomModel: 'custom/model',
@@ -115,8 +126,10 @@ describe('types.ts', () => {
         permissionMode: 'yolo',
         approvedActions: [],
         excludedTags: [],
+        mediaFolder: '',
         environmentVariables: '',
         envSnippets: [],
+        systemPrompt: '',
       };
 
       expect(settings.lastClaudeModel).toBe('claude-opus-4-5');

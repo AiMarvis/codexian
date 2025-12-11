@@ -50,6 +50,7 @@ export interface ClaudianSettings {
   enableBlocklist: boolean;
   blockedCommands: string[];
   showToolUse: boolean;
+  toolCallExpandedByDefault: boolean;
   model: ClaudeModel;
   lastClaudeModel?: ClaudeModel;
   lastCustomModel?: ClaudeModel;
@@ -80,6 +81,7 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
     'chmod -R 777',
   ],
   showToolUse: true,
+  toolCallExpandedByDefault: false,
   model: 'claude-haiku-4-5',
   lastClaudeModel: 'claude-haiku-4-5',
   lastCustomModel: '',

@@ -58,7 +58,7 @@ npm run build
 ## Usage
 
 **Two modes:**
-1. Click the bot icon in the ribbon or CMD+P to open Claudian on sidebar
+1. Click the bot icon in ribbon or launch Claudian in palette
 2. Select text in any note and press hotkey to open inline edit
 
 Use it like Claude Code, ask it to read, write, edit, search, etc. to help you with your notes.

@@ -191,23 +191,25 @@ export function isBlockedToolResult(content: string, isError?: boolean): boolean
   return false;
 }
 
-/** Renders a tool call UI element (for streaming). Expanded by default. */
+/** Renders a tool call UI element (for streaming). Expanded by default unless overridden. */
 export function renderToolCall(
   parentEl: HTMLElement,
   toolCall: ToolCallInfo,
-  toolCallElements: Map<string, HTMLElement>
+  toolCallElements: Map<string, HTMLElement>,
+  expandedByDefault = true
 ): HTMLElement {
-  const toolEl = parentEl.createDiv({ cls: 'claudian-tool-call expanded' });
+  const isExpanded = expandedByDefault;
+  const toolEl = parentEl.createDiv({ cls: `claudian-tool-call${isExpanded ? ' expanded' : ''}` });
   toolEl.dataset.toolId = toolCall.id;
   toolCallElements.set(toolCall.id, toolEl);
-  toolCall.isExpanded = true;
+  toolCall.isExpanded = isExpanded;
 
   // Header (clickable to expand/collapse)
   const header = toolEl.createDiv({ cls: 'claudian-tool-header' });
   header.setAttribute('tabindex', '0');
   header.setAttribute('role', 'button');
-  header.setAttribute('aria-expanded', 'true');
-  header.setAttribute('aria-label', `${getToolLabel(toolCall.name, toolCall.input)} - click to collapse`);
+  header.setAttribute('aria-expanded', isExpanded ? 'true' : 'false');
+  header.setAttribute('aria-label', `${getToolLabel(toolCall.name, toolCall.input)} - click to ${isExpanded ? 'collapse' : 'expand'}`);
 
   // Tool icon (decorative)
   const iconEl = header.createSpan({ cls: 'claudian-tool-icon' });
@@ -226,8 +228,11 @@ export function renderToolCall(
     statusEl.createSpan({ cls: 'claudian-spinner' });
   }
 
-  // Collapsible content (expanded by default)
+  // Collapsible content
   const content = toolEl.createDiv({ cls: 'claudian-tool-content' });
+  if (!isExpanded) {
+    content.style.display = 'none';
+  }
 
   // Tree-branch result row
   const resultRow = content.createDiv({ cls: 'claudian-tool-result-row' });
@@ -304,16 +309,20 @@ export function updateToolCallResult(
   }
 }
 
-/** Render a stored tool call (non-streaming). Collapsed by default. */
-export function renderStoredToolCall(parentEl: HTMLElement, toolCall: ToolCallInfo): HTMLElement {
-  const toolEl = parentEl.createDiv({ cls: 'claudian-tool-call' });
+/** Render a stored tool call (non-streaming). Collapsed by default unless overridden. */
+export function renderStoredToolCall(
+  parentEl: HTMLElement,
+  toolCall: ToolCallInfo,
+  expandedByDefault = false
+): HTMLElement {
+  const toolEl = parentEl.createDiv({ cls: `claudian-tool-call${expandedByDefault ? ' expanded' : ''}` });
 
   // Header
   const header = toolEl.createDiv({ cls: 'claudian-tool-header' });
   header.setAttribute('tabindex', '0');
   header.setAttribute('role', 'button');
-  header.setAttribute('aria-expanded', 'false');
-  header.setAttribute('aria-label', `${getToolLabel(toolCall.name, toolCall.input)} - click to expand`);
+  header.setAttribute('aria-expanded', expandedByDefault ? 'true' : 'false');
+  header.setAttribute('aria-label', `${getToolLabel(toolCall.name, toolCall.input)} - click to ${expandedByDefault ? 'collapse' : 'expand'}`);
 
   // Tool icon (decorative)
   const iconEl = header.createSpan({ cls: 'claudian-tool-icon' });
@@ -336,9 +345,11 @@ export function renderStoredToolCall(parentEl: HTMLElement, toolCall: ToolCallIn
     setIcon(statusEl, 'shield-off');
   }
 
-  // Collapsible content (collapsed by default for stored)
+  // Collapsible content
   const content = toolEl.createDiv({ cls: 'claudian-tool-content' });
-  content.style.display = 'none';
+  if (!expandedByDefault) {
+    content.style.display = 'none';
+  }
 
   // Tree-branch result row
   const resultRow = content.createDiv({ cls: 'claudian-tool-result-row' });
@@ -361,7 +372,7 @@ export function renderStoredToolCall(parentEl: HTMLElement, toolCall: ToolCallIn
   }
 
   // Toggle expand/collapse handler
-  let isExpanded = false;
+  let isExpanded = expandedByDefault;
   const toggleExpand = () => {
     isExpanded = !isExpanded;
     if (isExpanded) {

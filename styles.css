@@ -2329,6 +2329,11 @@
   flex-shrink: 0;
 }
 
+/* Hide empty status on successful completion so stats align to right edge */
+.claudian-write-edit-block.done .claudian-write-edit-status:empty {
+  display: none;
+}
+
 .claudian-write-edit-status svg {
   width: 16px;
   height: 16px;
