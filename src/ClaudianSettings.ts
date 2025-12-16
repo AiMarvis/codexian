@@ -4,7 +4,9 @@
  * Plugin settings UI for hotkeys, customization, safety, and environment variables.
  */
 
-import { App, PluginSettingTab, Setting } from 'obsidian';
+import type { App} from 'obsidian';
+import { PluginSettingTab, Setting } from 'obsidian';
+
 import type ClaudianPlugin from './main';
 import { EnvSnippetManager, SlashCommandSettings } from './ui';
 

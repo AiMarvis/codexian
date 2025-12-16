@@ -1,4 +1,5 @@
 import { setIcon } from 'obsidian';
+
 import {
   createAsyncSubagentBlock,
   finalizeAsyncSubagent,

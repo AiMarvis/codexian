@@ -3,8 +3,9 @@
  * TDD: Tests written first, implementation follows
  */
 
-import { TFile, WorkspaceLeaf } from 'obsidian';
 import { createHash } from 'crypto';
+import { TFile, WorkspaceLeaf } from 'obsidian';
+
 import { ClaudianView } from '../src/ClaudianView';
 import { FileContextManager } from '../src/ui/FileContext';
 
@@ -16,7 +17,7 @@ function createTFile(path: string): TFile {
 // Helper to create a mock plugin
 function createMockPlugin(settingsOverrides = {}) {
   // Track registered event handlers for vault events
-  const vaultEventHandlers: Map<string, Function[]> = new Map();
+  const vaultEventHandlers: Map<string, ((...args: unknown[]) => void)[]> = new Map();
 
   return {
     settings: {
@@ -38,7 +39,7 @@ function createMockPlugin(settingsOverrides = {}) {
         getAbstractFileByPath: jest.fn(),
         getMarkdownFiles: jest.fn().mockReturnValue([]),
         read: jest.fn().mockResolvedValue('mock file content'),
-        on: jest.fn((event: string, handler: Function) => {
+        on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
           if (!vaultEventHandlers.has(event)) {
             vaultEventHandlers.set(event, []);
           }
@@ -108,7 +109,7 @@ function createMockElement(tag = 'div') {
   const children: any[] = [];
   const classList = new Set<string>();
   const attributes = new Map<string, string>();
-  const eventListeners = new Map<string, Function[]>();
+  const eventListeners = new Map<string, ((...args: unknown[]) => void)[]>();
   const style: Record<string, string> = {};
 
   const element: any = {
@@ -130,7 +131,7 @@ function createMockElement(tag = 'div') {
     style,
     setAttribute: (name: string, value: string) => attributes.set(name, value),
     getAttribute: (name: string) => attributes.get(name),
-    addEventListener: (event: string, handler: Function) => {
+    addEventListener: (event: string, handler: (...args: unknown[]) => void) => {
       if (!eventListeners.has(event)) eventListeners.set(event, []);
       eventListeners.get(event)!.push(handler);
     },
@@ -854,7 +855,6 @@ describe('FileContextManager - File Hash Tracking', () => {
       });
 
       // Trigger delete event
-      const mockFile = createTFile(filePath);
       (fileContextManager as any).handleFileDeleted(filePath);
 
       expect((fileContextManager as any).editedFilesThisSession.has(filePath)).toBe(false);

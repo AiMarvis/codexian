@@ -5,12 +5,20 @@
  * Uses read-only tools and parses <instruction> tags from response.
  */
 
-import { query, type Options, type HookCallbackMatcher } from '@anthropic-ai/claude-agent-sdk';
-import type ClaudianPlugin from './main';
-import { type InstructionRefineResult, THINKING_BUDGETS } from './types';
-import { getVaultPath, parseEnvironmentVariables, findClaudeCLIPath, isPathWithinVault as isPathWithinVaultUtil } from './utils';
+import type { HookCallbackMatcher, Options } from '@anthropic-ai/claude-agent-sdk';
+import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
 
-const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob'] as const;
+import type ClaudianPlugin from './main';
+import { TOOL_GLOB, TOOL_GREP, TOOL_READ } from './tools/toolNames';
+import { type InstructionRefineResult, THINKING_BUDGETS } from './types';
+import {
+  findClaudeCLIPath,
+  getVaultPath,
+  isPathWithinVault as isPathWithinVaultUtil,
+  parseEnvironmentVariables,
+} from './utils';
+
+const READ_ONLY_TOOLS = [TOOL_READ, TOOL_GREP, TOOL_GLOB] as const;
 
 /** Builds the system prompt for instruction refinement, including existing instructions. */
 function buildRefineSystemPrompt(existingInstructions: string): string {
@@ -170,7 +178,7 @@ export class InstructionRefineService {
     }
 
     try {
-      const response = query({ prompt, options });
+      const response = agentQuery({ prompt, options });
       let responseText = '';
 
       for await (const message of response) {

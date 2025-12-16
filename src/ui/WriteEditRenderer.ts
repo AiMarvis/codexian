@@ -8,13 +8,16 @@
  */
 
 import { setIcon } from 'obsidian';
-import { ToolCallInfo, ToolDiffData } from '../types';
+
+import { TOOL_EDIT } from '../tools/toolNames';
+import type { ToolCallInfo, ToolDiffData } from '../types';
+import type {
+  DiffLine} from './DiffRenderer';
 import {
   computeLineDiff,
   countLineChanges,
-  renderDiffContent,
   isBinaryContent,
-  DiffLine,
+  renderDiffContent,
 } from './DiffRenderer';
 
 /** State for a streaming Write/Edit block. */
@@ -74,7 +77,7 @@ export function createWriteEditBlock(
   // File icon
   const iconEl = headerEl.createDiv({ cls: 'claudian-write-edit-icon' });
   iconEl.setAttribute('aria-hidden', 'true');
-  setIcon(iconEl, toolName === 'Edit' ? 'file-pen' : 'file-plus');
+  setIcon(iconEl, toolName === TOOL_EDIT ? 'file-pen' : 'file-plus');
 
   // Label: "Write: filename.md" or "Edit: filename.md"
   const labelEl = headerEl.createDiv({ cls: 'claudian-write-edit-label' });
@@ -223,7 +226,6 @@ export function finalizeWriteEditBlock(state: WriteEditState, isError: boolean):
 export function renderStoredWriteEdit(parentEl: HTMLElement, toolCall: ToolCallInfo): HTMLElement {
   const filePath = (toolCall.input.file_path as string) || 'file';
   const toolName = toolCall.name;
-  const isExpanded = false; // Collapsed by default for stored
   const isError = toolCall.status === 'error' || toolCall.status === 'blocked';
 
   const wrapperEl = parentEl.createDiv({ cls: 'claudian-write-edit-block' });
@@ -243,7 +245,7 @@ export function renderStoredWriteEdit(parentEl: HTMLElement, toolCall: ToolCallI
   // File icon
   const iconEl = headerEl.createDiv({ cls: 'claudian-write-edit-icon' });
   iconEl.setAttribute('aria-hidden', 'true');
-  setIcon(iconEl, toolName === 'Edit' ? 'file-pen' : 'file-plus');
+  setIcon(iconEl, toolName === TOOL_EDIT ? 'file-pen' : 'file-plus');
 
   // Label
   const labelEl = headerEl.createDiv({ cls: 'claudian-write-edit-label' });

@@ -1,13 +1,20 @@
 /**
  * Claudian - Utility functions
  *
- * Helper functions for vault operations, date formatting, and environment parsing.
+ * Helper functions for vault operations, date formatting, environment parsing,
+ * context file handling, and session recovery.
  */
 
-import type { App } from 'obsidian';
 import * as fs from 'fs';
-import * as path from 'path';
+import type { App } from 'obsidian';
 import * as os from 'os';
+import * as path from 'path';
+
+import type { ChatMessage, ToolCallInfo } from './types';
+
+// ============================================
+// Date Utilities
+// ============================================
 
 /** Returns today's date in readable and ISO format for the system prompt. */
 export function getTodayDate(): string {
@@ -67,6 +74,7 @@ function resolveRealPath(p: string): string {
     let current = absolute;
     const suffix: string[] = [];
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
         if (fs.existsSync(current)) {
@@ -186,22 +194,161 @@ export function appendMarkdownSnippet(existingPrompt: string, snippet: string): 
   return existingPrompt + separator + trimmedSnippet;
 }
 
+// Re-export isCommandBlocked from security module for backward compatibility
+export { isCommandBlocked } from './security/BlocklistChecker';
+
+// ============================================
+// Context Files
+// ============================================
+
+const CONTEXT_FILES_PREFIX_REGEX = /^Context files: \[.*?\]\n\n/;
+
+/** Formats a context files line for the prompt. */
+export function formatContextFilesLine(files: string[]): string {
+  return `Context files: [${files.join(', ')}]`;
+}
+
+/** Prepends context files to a prompt. */
+export function prependContextFiles(prompt: string, files: string[]): string {
+  return `${formatContextFilesLine(files)}\n\n${prompt}`;
+}
+
+/** Strips context files prefix from a prompt. */
+export function stripContextFilesPrefix(prompt: string): string {
+  return prompt.replace(CONTEXT_FILES_PREFIX_REGEX, '');
+}
+
+// ============================================
+// Session Recovery
+// ============================================
+
 /**
- * Checks if a bash command should be blocked by user-defined patterns.
- * Patterns are treated as case-insensitive regex; invalid regex falls back to substring match.
+ * Error patterns that indicate session needs recovery.
  */
-export function isCommandBlocked(command: string, patterns: string[], enableBlocklist: boolean): boolean {
-  if (!enableBlocklist) {
-    return false;
+const SESSION_ERROR_PATTERNS = [
+  'session expired',
+  'session not found',
+  'invalid session',
+  'session invalid',
+  'process exited with code',
+] as const;
+
+const SESSION_ERROR_COMPOUND_PATTERNS = [
+  { includes: ['session', 'expired'] },
+  { includes: ['resume', 'failed'] },
+  { includes: ['resume', 'error'] },
+] as const;
+
+/** Checks if an error indicates session needs recovery. */
+export function isSessionExpiredError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message.toLowerCase() : '';
+
+  for (const pattern of SESSION_ERROR_PATTERNS) {
+    if (msg.includes(pattern)) {
+      return true;
+    }
   }
 
-  return patterns.some((pattern) => {
-    try {
-      return new RegExp(pattern, 'i').test(command);
-    } catch {
-      return command.toLowerCase().includes(pattern.toLowerCase());
+  for (const { includes } of SESSION_ERROR_COMPOUND_PATTERNS) {
+    if (includes.every(part => msg.includes(part))) {
+      return true;
     }
-  });
+  }
+
+  return false;
+}
+
+// ============================================
+// History Reconstruction
+// ============================================
+
+/** Formats a tool call for inclusion in rebuilt context. */
+export function formatToolCallForContext(toolCall: ToolCallInfo, maxResultLength = 800): string {
+  const status = toolCall.status ?? 'completed';
+  const base = `[Tool ${toolCall.name} status=${status}]`;
+  const hasResult = typeof toolCall.result === 'string' && toolCall.result.trim().length > 0;
+
+  if (!hasResult) {
+    return base;
+  }
+
+  const result = truncateToolResult(toolCall.result as string, maxResultLength);
+  return `${base} result: ${result}`;
+}
+
+/** Truncates tool result to avoid overloading recovery prompt. */
+export function truncateToolResult(result: string, maxLength = 800): string {
+  if (result.length > maxLength) {
+    return `${result.slice(0, maxLength)}... (truncated)`;
+  }
+  return result;
+}
+
+/** Formats a context line for user messages when rebuilding history. */
+export function formatContextLine(message: ChatMessage): string | null {
+  if (!message.contextFiles || message.contextFiles.length === 0) {
+    return null;
+  }
+  return formatContextFilesLine(message.contextFiles);
+}
+
+/**
+ * Builds conversation context from message history for session recovery.
+ */
+export function buildContextFromHistory(messages: ChatMessage[]): string {
+  const parts: string[] = [];
+
+  for (const message of messages) {
+    if (message.role !== 'user' && message.role !== 'assistant') {
+      continue;
+    }
+
+    if (message.role === 'assistant') {
+      const hasContent = message.content && message.content.trim().length > 0;
+      const hasToolResult = message.toolCalls?.some(
+        tc => tc.result && tc.result.trim().length > 0
+      );
+      if (!hasContent && !hasToolResult) {
+        continue;
+      }
+    }
+
+    const role = message.role === 'user' ? 'User' : 'Assistant';
+    const lines: string[] = [];
+    const content = message.content?.trim();
+    const contextLine = formatContextLine(message);
+
+    const userPayload = contextLine
+      ? content
+        ? `${contextLine}\n\n${content}`
+        : contextLine
+      : content;
+
+    lines.push(userPayload ? `${role}: ${userPayload}` : `${role}:`);
+
+    if (message.role === 'assistant' && message.toolCalls?.length) {
+      const toolLines = message.toolCalls
+        .map(tc => formatToolCallForContext(tc))
+        .filter(Boolean) as string[];
+      if (toolLines.length > 0) {
+        lines.push(...toolLines);
+      }
+    }
+
+    parts.push(lines.join('\n'));
+  }
+
+  return parts.join('\n\n');
+}
+
+/** Gets the last user message from conversation history. */
+export function getLastUserMessage(messages: ChatMessage[]): ChatMessage | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'user') {
+      return messages[i];
+    }
+  }
+  return undefined;
 }
 
 /** Extracts model options from ANTHROPIC_* environment variables, deduplicated by value. */

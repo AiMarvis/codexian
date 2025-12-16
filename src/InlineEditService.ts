@@ -5,11 +5,27 @@
  * Uses read-only tools only and supports multi-turn clarification.
  */
 
-import { query, type Options, type HookCallbackMatcher } from '@anthropic-ai/claude-agent-sdk';
+import type { HookCallbackMatcher, Options } from '@anthropic-ai/claude-agent-sdk';
+import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
+
 import type ClaudianPlugin from './main';
-import { THINKING_BUDGETS } from './types';
-import { getVaultPath, parseEnvironmentVariables, findClaudeCLIPath, isPathWithinVault as isPathWithinVaultUtil } from './utils';
 import { getInlineEditSystemPrompt } from './systemPrompt';
+import { getPathFromToolInput } from './tools/toolInput';
+import {
+  isReadOnlyTool,
+  READ_ONLY_TOOLS,
+  TOOL_GLOB,
+  TOOL_GREP,
+  TOOL_LS,
+  TOOL_READ,
+} from './tools/toolNames';
+import { THINKING_BUDGETS } from './types';
+import {
+  findClaudeCLIPath,
+  getVaultPath,
+  isPathWithinVault as isPathWithinVaultUtil,
+  parseEnvironmentVariables,
+} from './utils';
 
 export type InlineEditMode = 'selection' | 'cursor';
 
@@ -44,8 +60,6 @@ export interface InlineEditResult {
   clarification?: string;
   error?: string;
 }
-
-const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob', 'LS', 'WebSearch', 'WebFetch'] as const;
 
 /** Helper to find nearest non-empty line in a direction. */
 function findNearestNonEmptyLine(
@@ -185,7 +199,7 @@ export class InlineEditService {
     }
 
     try {
-      const response = query({ prompt, options });
+      const response = agentQuery({ prompt, options });
       let responseText = '';
 
       for await (const message of response) {
@@ -283,7 +297,7 @@ export class InlineEditService {
           };
           const toolName = input.tool_name;
 
-          if (READ_ONLY_TOOLS.includes(toolName as typeof READ_ONLY_TOOLS[number])) {
+          if (isReadOnlyTool(toolName)) {
             return { continue: true };
           }
 
@@ -302,7 +316,7 @@ export class InlineEditService {
 
   /** Creates PreToolUse hook to restrict file tools to the vault. */
   private createVaultRestrictionHook(vaultPath: string): HookCallbackMatcher {
-    const fileTools = ['Read', 'Glob', 'Grep', 'LS'];
+    const fileTools = [TOOL_READ, TOOL_GLOB, TOOL_GREP, TOOL_LS] as const;
 
     return {
       hooks: [
@@ -313,11 +327,11 @@ export class InlineEditService {
           };
 
           const toolName = input.tool_name;
-          if (!fileTools.includes(toolName)) {
+          if (!fileTools.includes(toolName as (typeof fileTools)[number])) {
             return { continue: true };
           }
 
-          const filePath = this.getPathFromToolInput(toolName, input.tool_input);
+          const filePath = getPathFromToolInput(toolName, input.tool_input);
           if (filePath && !isPathWithinVaultUtil(filePath, vaultPath)) {
             return {
               continue: false,
@@ -333,20 +347,6 @@ export class InlineEditService {
         },
       ],
     };
-  }
-
-  private getPathFromToolInput(toolName: string, toolInput: Record<string, unknown>): string | null {
-    switch (toolName) {
-      case 'Read':
-        return (toolInput.file_path as string) || null;
-      case 'Glob':
-      case 'Grep':
-        return (toolInput.path as string) || (toolInput.pattern as string) || null;
-      case 'LS':
-        return (toolInput.path as string) || null;
-      default:
-        return null;
-    }
   }
 
   private extractTextFromMessage(message: any): string | null {

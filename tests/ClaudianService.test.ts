@@ -1,11 +1,13 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
+import * as path from 'path';
+
+// eslint-disable-next-line jest/no-mocks-import
 import {
-  setMockMessages,
-  resetMockMessages,
   getLastOptions,
   getLastResponse,
+  resetMockMessages,
+  setMockMessages,
 } from './__mocks__/claude-agent-sdk';
 
 // Mock fs module
@@ -13,6 +15,21 @@ jest.mock('fs');
 
 // Now import after all mocks are set up
 import { ClaudianService } from '../src/ClaudianService';
+import { createFileHashPostHook, createFileHashPreHook, type DiffContentEntry } from '../src/hooks/DiffTrackingHooks';
+import { createVaultRestrictionHook } from '../src/hooks/SecurityHooks';
+import { hydrateImagesData, readImageAttachmentBase64, resolveImageFilePath } from '../src/images/imageLoader';
+import { transformSDKMessage } from '../src/sdk/MessageTransformer';
+import { getActionDescription, getActionPattern } from '../src/security/ApprovalManager';
+import { extractPathCandidates } from '../src/security/BashPathValidator';
+import { getPathFromToolInput } from '../src/tools/toolInput';
+import type { ToolDiffData } from '../src/types';
+import {
+  buildContextFromHistory,
+  formatToolCallForContext,
+  getLastUserMessage,
+  isSessionExpiredError,
+  truncateToolResult,
+} from '../src/utils';
 
 // Helper to create SDK-format assistant message with tool_use
 function createAssistantWithToolUse(toolName: string, toolInput: Record<string, unknown>, toolId = 'tool-123') {
@@ -345,7 +362,8 @@ describe('ClaudianService', () => {
         { type: 'result' },
       ]);
 
-      for await (const _ of service.query('first')) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of service.query('first')) {
         // drain
       }
 
@@ -354,7 +372,8 @@ describe('ClaudianService', () => {
         { type: 'result' },
       ]);
 
-      for await (const _ of service.query('second')) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of service.query('second')) {
         // drain
       }
 
@@ -603,7 +622,8 @@ describe('ClaudianService', () => {
         { type: 'result' },
       ]);
 
-      for await (const _ of service.query('continue')) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of service.query('continue')) {
         // drain
       }
 
@@ -620,7 +640,8 @@ describe('ClaudianService', () => {
         { type: 'result' },
       ]);
 
-      for await (const _ of service.query('hello')) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of service.query('hello')) {
         // drain
       }
 
@@ -634,8 +655,9 @@ describe('ClaudianService', () => {
       // Mock realpathSync to normalize paths (resolve .. and .)
       const normalizePath = (p: string) => {
         // Use path.resolve to normalize path traversal
-        const path = require('path');
-        return path.resolve(p);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const pathModule = require('path');
+        return pathModule.resolve(p);
       };
       (fs.realpathSync as any) = jest.fn(normalizePath);
       if (fs.realpathSync) {
@@ -892,10 +914,10 @@ describe('ClaudianService', () => {
       expect(blockedChunk?.content).toContain('outside the vault');
     });
 
-    it('should block Grep tool with absolute pattern', async () => {
+    it('should block Grep tool searching outside vault', async () => {
       setMockMessages([
         { type: 'system', subtype: 'init', session_id: 'test-session' },
-        createAssistantWithToolUse('Grep', { pattern: '/etc/passwd' }, 'grep-abs'),
+        createAssistantWithToolUse('Grep', { pattern: 'passwd', path: '/etc' }, 'grep-outside'),
         { type: 'result' },
       ]);
 
@@ -907,6 +929,22 @@ describe('ClaudianService', () => {
       const blockedChunk = chunks.find((c) => c.type === 'blocked');
       expect(blockedChunk).toBeDefined();
       expect(blockedChunk?.content).toContain('outside the vault');
+    });
+
+    it('should not block Grep tool with absolute pattern', async () => {
+      setMockMessages([
+        { type: 'system', subtype: 'init', session_id: 'test-session' },
+        createAssistantWithToolUse('Grep', { pattern: '/etc/passwd' }, 'grep-abs-pattern'),
+        { type: 'result' },
+      ]);
+
+      const chunks: any[] = [];
+      for await (const chunk of service.query('grep pattern')) {
+        chunks.push(chunk);
+      }
+
+      const blockedChunk = chunks.find((c) => c.type === 'blocked');
+      expect(blockedChunk).toBeUndefined();
     });
 
     it('should block tilde expansion paths outside vault', async () => {
@@ -977,7 +1015,7 @@ describe('ClaudianService', () => {
     });
 
     it('should extract quoted and relative paths from bash commands', () => {
-      const candidates = (service as any).extractPathCandidates('cat "../secret.txt" ./notes/file.md ~/vault/config');
+      const candidates = extractPathCandidates('cat "../secret.txt" ./notes/file.md ~/vault/config');
       expect(candidates).toEqual(expect.arrayContaining(['../secret.txt', './notes/file.md', '~/vault/config']));
     });
   });
@@ -1059,25 +1097,25 @@ describe('ClaudianService', () => {
     });
 
     it('should store session-scoped approved actions', async () => {
-      // Approve an action with session scope
-      await (service as any).approveAction('Bash', { command: 'ls -la' }, 'session');
+      // Approve an action with session scope via the approval manager
+      await (service as any).approvalManager.approveAction('Bash', { command: 'ls -la' }, 'session');
 
       // Check if action is approved
-      const isApproved = (service as any).isActionApproved('Bash', { command: 'ls -la' });
+      const isApproved = (service as any).approvalManager.isActionApproved('Bash', { command: 'ls -la' });
       expect(isApproved).toBe(true);
     });
 
     it('should clear session-scoped approvals on resetSession', async () => {
-      await (service as any).approveAction('Bash', { command: 'ls -la' }, 'session');
+      await (service as any).approvalManager.approveAction('Bash', { command: 'ls -la' }, 'session');
 
       service.resetSession();
 
-      const isApproved = (service as any).isActionApproved('Bash', { command: 'ls -la' });
+      const isApproved = (service as any).approvalManager.isActionApproved('Bash', { command: 'ls -la' });
       expect(isApproved).toBe(false);
     });
 
     it('should store permanent approved actions in settings', async () => {
-      await (service as any).approveAction('Read', { file_path: '/test/file.md' }, 'always');
+      await (service as any).approvalManager.approveAction('Read', { file_path: '/test/file.md' }, 'always');
 
       expect(mockPlugin.settings.approvedActions.length).toBe(1);
       expect(mockPlugin.settings.approvedActions[0].toolName).toBe('Read');
@@ -1089,18 +1127,18 @@ describe('ClaudianService', () => {
         { toolName: 'Read', pattern: '/test/file.md', approvedAt: Date.now(), scope: 'always' },
       ];
 
-      const isApproved = (service as any).isActionApproved('Read', { file_path: '/test/file.md' });
+      const isApproved = (service as any).approvalManager.isActionApproved('Read', { file_path: '/test/file.md' });
       expect(isApproved).toBe(true);
     });
 
     it('should match Bash commands exactly', async () => {
-      await (service as any).approveAction('Bash', { command: 'ls -la' }, 'session');
+      await (service as any).approvalManager.approveAction('Bash', { command: 'ls -la' }, 'session');
 
       // Exact match should be approved
-      expect((service as any).isActionApproved('Bash', { command: 'ls -la' })).toBe(true);
+      expect((service as any).approvalManager.isActionApproved('Bash', { command: 'ls -la' })).toBe(true);
 
       // Different command should not be approved
-      expect((service as any).isActionApproved('Bash', { command: 'ls -l' })).toBe(false);
+      expect((service as any).approvalManager.isActionApproved('Bash', { command: 'ls -l' })).toBe(false);
     });
 
     it('should match file paths with prefix', async () => {
@@ -1109,28 +1147,39 @@ describe('ClaudianService', () => {
       ];
 
       // Path starting with approved prefix should match
-      expect((service as any).isActionApproved('Read', { file_path: '/test/vault/notes/file.md' })).toBe(true);
+      expect((service as any).approvalManager.isActionApproved('Read', { file_path: '/test/vault/notes/file.md' })).toBe(true);
 
       // Path not starting with prefix should not match
-      expect((service as any).isActionApproved('Read', { file_path: '/other/path/file.md' })).toBe(false);
+      expect((service as any).approvalManager.isActionApproved('Read', { file_path: '/other/path/file.md' })).toBe(false);
+    });
+
+    it('should not match non-segment prefixes for file paths', () => {
+      mockPlugin.settings.approvedActions = [
+        { toolName: 'Read', pattern: '/test/vault/notes', approvedAt: Date.now(), scope: 'always' },
+      ];
+
+      expect((service as any).approvalManager.isActionApproved('Read', { file_path: '/test/vault/notes/file.md' })).toBe(true);
+      expect((service as any).approvalManager.isActionApproved('Read', { file_path: '/test/vault/notes2/file.md' })).toBe(false);
     });
 
     it('should generate correct action patterns for different tools', () => {
-      expect((service as any).getActionPattern('Bash', { command: 'git status' })).toBe('git status');
-      expect((service as any).getActionPattern('Read', { file_path: '/test/file.md' })).toBe('/test/file.md');
-      expect((service as any).getActionPattern('Write', { file_path: '/test/output.md' })).toBe('/test/output.md');
-      expect((service as any).getActionPattern('Edit', { file_path: '/test/edit.md' })).toBe('/test/edit.md');
-      expect((service as any).getActionPattern('Glob', { pattern: '**/*.md' })).toBe('**/*.md');
-      expect((service as any).getActionPattern('Grep', { pattern: 'TODO' })).toBe('TODO');
+      // Now test the standalone function directly
+      expect(getActionPattern('Bash', { command: 'git status' })).toBe('git status');
+      expect(getActionPattern('Read', { file_path: '/test/file.md' })).toBe('/test/file.md');
+      expect(getActionPattern('Write', { file_path: '/test/output.md' })).toBe('/test/output.md');
+      expect(getActionPattern('Edit', { file_path: '/test/edit.md' })).toBe('/test/edit.md');
+      expect(getActionPattern('Glob', { pattern: '**/*.md' })).toBe('**/*.md');
+      expect(getActionPattern('Grep', { pattern: 'TODO' })).toBe('TODO');
     });
 
     it('should generate correct action descriptions', () => {
-      expect((service as any).getActionDescription('Bash', { command: 'git status' })).toBe('Run command: git status');
-      expect((service as any).getActionDescription('Read', { file_path: '/test/file.md' })).toBe('Read file: /test/file.md');
-      expect((service as any).getActionDescription('Write', { file_path: '/test/output.md' })).toBe('Write to file: /test/output.md');
-      expect((service as any).getActionDescription('Edit', { file_path: '/test/edit.md' })).toBe('Edit file: /test/edit.md');
-      expect((service as any).getActionDescription('Glob', { pattern: '**/*.md' })).toBe('Search files matching: **/*.md');
-      expect((service as any).getActionDescription('Grep', { pattern: 'TODO' })).toBe('Search content matching: TODO');
+      // Now test the standalone function directly
+      expect(getActionDescription('Bash', { command: 'git status' })).toBe('Run command: git status');
+      expect(getActionDescription('Read', { file_path: '/test/file.md' })).toBe('Read file: /test/file.md');
+      expect(getActionDescription('Write', { file_path: '/test/output.md' })).toBe('Write to file: /test/output.md');
+      expect(getActionDescription('Edit', { file_path: '/test/edit.md' })).toBe('Edit file: /test/edit.md');
+      expect(getActionDescription('Glob', { pattern: '**/*.md' })).toBe('Search files matching: **/*.md');
+      expect(getActionDescription('Grep', { pattern: 'TODO' })).toBe('Search content matching: TODO');
     });
   });
 
@@ -1159,7 +1208,9 @@ describe('ClaudianService', () => {
 
       expect(result.behavior).toBe('allow');
       expect(approvalCallback).toHaveBeenCalled();
-      expect((service as any).sessionApprovedActions.some((a: any) => a.toolName === 'Bash')).toBe(true);
+      // Access via approval manager's session approvals
+      const sessionApprovals = (service as any).approvalManager.getSessionApprovals();
+      expect(sessionApprovals.some((a: any) => a.toolName === 'Bash')).toBe(true);
     });
 
     it('should persist always-allow approvals and save settings', async () => {
@@ -1188,8 +1239,10 @@ describe('ClaudianService', () => {
 
     it('should cancel file edit state when approval is denied', async () => {
       const cancelFileEdit = jest.fn();
-      mockPlugin.getView = jest.fn().mockReturnValue({
-        fileContextManager: { cancelFileEdit },
+      service.setFileEditTracker({
+        cancelFileEdit,
+        markFileBeingEdited: jest.fn().mockResolvedValue(undefined),
+        trackEditedFile: jest.fn().mockResolvedValue(undefined),
       });
       const approvalCallback = jest.fn().mockResolvedValue('deny');
       service.setApprovalCallback(approvalCallback);
@@ -1203,8 +1256,10 @@ describe('ClaudianService', () => {
 
     it('should deny and interrupt when approval flow errors', async () => {
       const cancelFileEdit = jest.fn();
-      mockPlugin.getView = jest.fn().mockReturnValue({
-        fileContextManager: { cancelFileEdit },
+      service.setFileEditTracker({
+        cancelFileEdit,
+        markFileBeingEdited: jest.fn().mockResolvedValue(undefined),
+        trackEditedFile: jest.fn().mockResolvedValue(undefined),
       });
       const approvalCallback = jest.fn().mockRejectedValue(new Error('boom'));
       service.setApprovalCallback(approvalCallback);
@@ -1225,26 +1280,29 @@ describe('ClaudianService', () => {
     });
 
     it('should detect session expired errors', () => {
-      expect((service as any).isSessionExpiredError(new Error('Session expired'))).toBe(true);
-      expect((service as any).isSessionExpiredError(new Error('session not found'))).toBe(true);
-      expect((service as any).isSessionExpiredError(new Error('invalid session'))).toBe(true);
-      expect((service as any).isSessionExpiredError(new Error('Resume failed'))).toBe(true);
+      // Now test the standalone function directly
+      expect(isSessionExpiredError(new Error('Session expired'))).toBe(true);
+      expect(isSessionExpiredError(new Error('session not found'))).toBe(true);
+      expect(isSessionExpiredError(new Error('invalid session'))).toBe(true);
+      expect(isSessionExpiredError(new Error('Resume failed'))).toBe(true);
     });
 
     it('should not detect non-session errors as session errors', () => {
-      expect((service as any).isSessionExpiredError(new Error('Network error'))).toBe(false);
-      expect((service as any).isSessionExpiredError(new Error('Rate limited'))).toBe(false);
-      expect((service as any).isSessionExpiredError(new Error('Invalid API key'))).toBe(false);
+      // Now test the standalone function directly
+      expect(isSessionExpiredError(new Error('Network error'))).toBe(false);
+      expect(isSessionExpiredError(new Error('Rate limited'))).toBe(false);
+      expect(isSessionExpiredError(new Error('Invalid API key'))).toBe(false);
     });
 
     it('should build context from conversation history', () => {
       const messages = [
-        { id: 'msg-1', role: 'user', content: 'Hello', timestamp: Date.now() },
-        { id: 'msg-2', role: 'assistant', content: 'Hi there!', timestamp: Date.now() },
-        { id: 'msg-3', role: 'user', content: 'How are you?', timestamp: Date.now() },
+        { id: 'msg-1', role: 'user' as const, content: 'Hello', timestamp: Date.now() },
+        { id: 'msg-2', role: 'assistant' as const, content: 'Hi there!', timestamp: Date.now() },
+        { id: 'msg-3', role: 'user' as const, content: 'How are you?', timestamp: Date.now() },
       ];
 
-      const context = (service as any).buildContextFromHistory(messages);
+      // Now test the standalone function directly
+      const context = buildContextFromHistory(messages);
 
       expect(context).toContain('User: Hello');
       expect(context).toContain('Assistant: Hi there!');
@@ -1253,19 +1311,20 @@ describe('ClaudianService', () => {
 
     it('should include tool call info in context', () => {
       const messages = [
-        { id: 'msg-1', role: 'user', content: 'Read a file', timestamp: Date.now() },
+        { id: 'msg-1', role: 'user' as const, content: 'Read a file', timestamp: Date.now() },
         {
           id: 'msg-2',
-          role: 'assistant',
+          role: 'assistant' as const,
           content: 'Reading file...',
           timestamp: Date.now(),
           toolCalls: [
-            { id: 'tool-1', name: 'Read', input: { file_path: '/test.md' }, status: 'completed', result: 'File contents' },
+            { id: 'tool-1', name: 'Read', input: { file_path: '/test.md' }, status: 'completed' as const, result: 'File contents' },
           ],
         },
       ];
 
-      const context = (service as any).buildContextFromHistory(messages);
+      // Now test the standalone function directly
+      const context = buildContextFromHistory(messages);
 
       expect(context).toContain('[Tool Read status=completed]');
       expect(context).toContain('File contents');
@@ -1273,17 +1332,19 @@ describe('ClaudianService', () => {
 
     it('should include context files in rebuilt history', () => {
       const messages = [
-        { id: 'msg-1', role: 'user', content: 'Edit this file', timestamp: Date.now(), contextFiles: ['notes/file.md'] },
+        { id: 'msg-1', role: 'user' as const, content: 'Edit this file', timestamp: Date.now(), contextFiles: ['notes/file.md'] },
       ];
 
-      const context = (service as any).buildContextFromHistory(messages);
+      // Now test the standalone function directly
+      const context = buildContextFromHistory(messages);
 
       expect(context).toContain('Context files: [notes/file.md]');
     });
 
     it('should truncate long tool results', () => {
       const longResult = 'x'.repeat(1000);
-      const truncated = (service as any).truncateToolResultForContext(longResult, 100);
+      // Now test the standalone function directly
+      const truncated = truncateToolResult(longResult, 100);
 
       expect(truncated.length).toBeLessThan(longResult.length);
       expect(truncated).toContain('(truncated)');
@@ -1291,7 +1352,8 @@ describe('ClaudianService', () => {
 
     it('should not truncate short tool results', () => {
       const shortResult = 'Short result';
-      const result = (service as any).truncateToolResultForContext(shortResult, 100);
+      // Now test the standalone function directly
+      const result = truncateToolResult(shortResult, 100);
 
       expect(result).toBe(shortResult);
     });
@@ -1371,7 +1433,7 @@ describe('ClaudianService', () => {
     });
 
     it('should hydrate images using existing data, cache, and file paths', async () => {
-      const imageCache = await import('../src/imageCache');
+      const imageCache = await import('../src/images/imageCache');
       jest.spyOn(imageCache, 'readCachedImageBase64').mockReturnValue('CACHE');
 
       (fs.existsSync as jest.Mock).mockImplementation((p: any) => p === '/test/vault/path/c.png');
@@ -1383,7 +1445,7 @@ describe('ClaudianService', () => {
         { id: 'img-3', name: 'c.png', mediaType: 'image/png', filePath: 'c.png', size: 1, source: 'file' },
       ];
 
-      const hydrated = await (service as any).hydrateImagesData(images, '/test/vault/path');
+      const hydrated = await hydrateImagesData(mockPlugin.app, images, '/test/vault/path');
 
       expect(hydrated?.[0].data).toBe('DATA');
       expect(hydrated?.[1].data).toBe('CACHE');
@@ -1407,7 +1469,8 @@ describe('ClaudianService', () => {
         { type: 'result' },
       ]);
 
-      for await (const _ of service.query('hello')) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of service.query('hello')) {
         // drain
       }
 
@@ -1428,7 +1491,8 @@ describe('ClaudianService', () => {
         { type: 'result' },
       ]);
 
-      for await (const _ of service.query('hello')) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      for await (const _chunk of service.query('hello')) {
         // drain
       }
 
@@ -1451,7 +1515,7 @@ describe('ClaudianService', () => {
         },
       };
 
-      const chunks = Array.from((service as any).transformSDKMessage(sdkMessage));
+      const chunks = Array.from(transformSDKMessage(sdkMessage));
       expect(chunks[0]).toEqual(expect.objectContaining({ type: 'tool_result', id: 'tool-1', isError: true }));
     });
 
@@ -1469,10 +1533,10 @@ describe('ClaudianService', () => {
         event: { type: 'content_block_delta', delta: { type: 'text_delta', text: ' world' } },
       };
 
-      const toolChunks = Array.from((service as any).transformSDKMessage(toolUseMsg));
+      const toolChunks = Array.from(transformSDKMessage(toolUseMsg));
       const textChunks = [
-        ...Array.from((service as any).transformSDKMessage(textStartMsg)),
-        ...Array.from((service as any).transformSDKMessage(textDeltaMsg)),
+        ...Array.from(transformSDKMessage(textStartMsg)),
+        ...Array.from(transformSDKMessage(textDeltaMsg)),
       ];
 
       expect(toolChunks[0]).toEqual(expect.objectContaining({ type: 'tool_use', id: 't1', name: 'Read' }));
@@ -1487,13 +1551,12 @@ describe('ClaudianService', () => {
       (fs.readFileSync as jest.Mock).mockReset();
 
       mockPlugin = createMockPlugin({ permissionMode: 'yolo' });
-      mockPlugin.getView = jest.fn().mockReturnValue({
-        fileContextManager: {
-          markFileBeingEdited: jest.fn().mockResolvedValue(undefined),
-          trackEditedFile: jest.fn().mockResolvedValue(undefined),
-        },
-      });
       service = new ClaudianService(mockPlugin);
+      service.setFileEditTracker({
+        cancelFileEdit: jest.fn(),
+        markFileBeingEdited: jest.fn().mockResolvedValue(undefined),
+        trackEditedFile: jest.fn().mockResolvedValue(undefined),
+      });
       (service as any).vaultPath = '/test/vault/path';
     });
 
@@ -1504,13 +1567,18 @@ describe('ClaudianService', () => {
         .mockReturnValueOnce('old')
         .mockReturnValueOnce('new');
 
-      const preHook = (service as any).createFileHashPreHook();
-      const postHook = (service as any).createFileHashPostHook();
+      // Create hooks using the exported functions
+      const originalContents = new Map<string, DiffContentEntry>();
+      const pendingDiffData = new Map<string, ToolDiffData>();
+      const vaultPath = '/test/vault/path';
+
+      const preHook = createFileHashPreHook(vaultPath, originalContents);
+      const postHook = createFileHashPostHook(vaultPath, originalContents, pendingDiffData);
 
       await preHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'note.md' } }, 'tool-1');
       await postHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'note.md' }, tool_result: {} }, 'tool-1');
 
-      const diff = service.getDiffData('tool-1');
+      const diff = pendingDiffData.get('tool-1');
       expect(diff).toEqual({ filePath: 'note.md', originalContent: 'old', newContent: 'new' });
     });
 
@@ -1518,13 +1586,18 @@ describe('ClaudianService', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (fs.statSync as jest.Mock).mockReturnValue({ size: 200 * 1024 });
 
-      const preHook = (service as any).createFileHashPreHook();
-      const postHook = (service as any).createFileHashPostHook();
+      // Create hooks using the exported functions
+      const originalContents = new Map<string, DiffContentEntry>();
+      const pendingDiffData = new Map<string, ToolDiffData>();
+      const vaultPath = '/test/vault/path';
+
+      const preHook = createFileHashPreHook(vaultPath, originalContents);
+      const postHook = createFileHashPostHook(vaultPath, originalContents, pendingDiffData);
 
       await preHook.hooks[0]({ tool_name: 'Edit', tool_input: { file_path: 'big.md' } }, 'tool-big');
       await postHook.hooks[0]({ tool_name: 'Edit', tool_input: { file_path: 'big.md' }, tool_result: {} }, 'tool-big');
 
-      const diff = service.getDiffData('tool-big');
+      const diff = pendingDiffData.get('tool-big');
       expect(diff).toEqual({ filePath: 'big.md', skippedReason: 'too_large' });
     });
 
@@ -1532,13 +1605,18 @@ describe('ClaudianService', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(false);
       (fs.statSync as jest.Mock).mockReturnValue({ size: 10 });
 
-      const preHook = (service as any).createFileHashPreHook();
-      const postHook = (service as any).createFileHashPostHook();
+      // Create hooks using the exported functions
+      const originalContents = new Map<string, DiffContentEntry>();
+      const pendingDiffData = new Map<string, ToolDiffData>();
+      const vaultPath = '/test/vault/path';
+
+      const preHook = createFileHashPreHook(vaultPath, originalContents);
+      const postHook = createFileHashPostHook(vaultPath, originalContents, pendingDiffData);
 
       await preHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'new.md' } }, 'tool-new');
       await postHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'new.md' }, tool_result: {} }, 'tool-new');
 
-      const diff = service.getDiffData('tool-new');
+      const diff = pendingDiffData.get('tool-new');
       expect(diff).toEqual({ filePath: 'new.md', skippedReason: 'unavailable' });
     });
   });
@@ -1550,6 +1628,7 @@ describe('ClaudianService', () => {
     });
 
     it('yields error when session retry also fails', async () => {
+      // eslint-disable-next-line require-yield
       jest.spyOn(service as any, 'queryViaSDK').mockImplementation(async function* () {
         throw new Error('Session expired');
       });
@@ -1567,6 +1646,7 @@ describe('ClaudianService', () => {
     });
 
     it('yields error for non-session failures', async () => {
+      // eslint-disable-next-line require-yield
       jest.spyOn(service as any, 'queryViaSDK').mockImplementation(async function* () {
         throw new Error('Network down');
       });
@@ -1584,35 +1664,39 @@ describe('ClaudianService', () => {
         { id: 'u1', role: 'user', content: 'Hello', timestamp: 0 },
       ];
 
-      const context = (service as any).buildContextFromHistory(messages);
+      // Now test the standalone function directly
+      const context = buildContextFromHistory(messages);
       expect(context).toContain('User: Hello');
       expect(context).not.toContain('system');
     });
 
     it('returns undefined when no user message exists', () => {
-      const last = (service as any).getLastUserMessage([
-        { id: 'a1', role: 'assistant', content: 'Hi', timestamp: 0 },
+      // Now test the standalone function directly
+      const last = getLastUserMessage([
+        { id: 'a1', role: 'assistant' as const, content: 'Hi', timestamp: 0 },
       ]);
       expect(last).toBeUndefined();
     });
 
     it('formats tool call without result', () => {
-      const line = (service as any).formatToolCallForContext({ id: 't', name: 'Read', input: {}, status: 'completed' });
+      // Now test the standalone function directly
+      const line = formatToolCallForContext({ id: 't', name: 'Read', input: {}, status: 'completed' as const });
       expect(line).toBe('[Tool Read status=completed]');
     });
 
-    it('handles image read errors and path resolution branches', async () => {
+    it('handles image read errors and path resolution branches', () => {
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (fs.readFileSync as jest.Mock).mockImplementation(() => { throw new Error('boom'); });
 
-      const base64 = await (service as any).loadImageBase64({ filePath: 'x.png' }, '/test/vault');
+      const base64 = readImageAttachmentBase64(mockPlugin.app, { filePath: 'x.png' } as any, '/test/vault');
       expect(base64).toBeNull();
 
-      expect((service as any).resolveImagePath('/abs.png', '/test/vault')).toBe('/abs.png');
-      expect((service as any).resolveImagePath('rel.png', null)).toBeNull();
+      expect(resolveImageFilePath('/abs.png', '/test/vault')).toBe('/abs.png');
+      expect(resolveImageFilePath('rel.png', null)).toBeNull();
     });
 
     it('yields error when SDK query throws inside queryViaSDK', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const sdk = require('@anthropic-ai/claude-agent-sdk');
       const spy = jest.spyOn(sdk, 'query').mockImplementation(() => { throw new Error('boom'); });
 
@@ -1635,71 +1719,88 @@ describe('ClaudianService', () => {
     });
 
     it('returns continue for non-file tools in vault hook and null for unknown paths', async () => {
-      (service as any).vaultPath = '/test/vault/path';
-      const hook = (service as any).createVaultRestrictionHook();
+      // Create vault restriction hook using the exported function
+      const hook = createVaultRestrictionHook({
+        isPathWithinVault: () => true,
+        isAllowedExportPath: () => false,
+      });
       const res = await hook.hooks[0]({ tool_name: 'WebSearch', tool_input: {} }, 't1', {});
       expect(res.continue).toBe(true);
 
-      expect((service as any).getPathFromToolInput('WebSearch', {})).toBeNull();
+      expect(getPathFromToolInput('WebSearch', {})).toBeNull();
+    });
+
+    it('does not treat Grep pattern as a path', () => {
+      expect(getPathFromToolInput('Grep', { pattern: '/etc/passwd' })).toBeNull();
+      expect(getPathFromToolInput('Grep', { pattern: 'TODO', path: 'notes' })).toBe('notes');
     });
 
     it('covers NotebookEdit and default patterns/descriptions', () => {
-      expect((service as any).getActionPattern('NotebookEdit', { notebook_path: 'nb.ipynb' })).toBe('nb.ipynb');
-      expect((service as any).getActionPattern('Other', { foo: 'bar' })).toContain('foo');
-      expect((service as any).getActionDescription('Other', { foo: 'bar' })).toContain('foo');
+      // Now test the standalone functions directly
+      expect(getActionPattern('NotebookEdit', { notebook_path: 'nb.ipynb' })).toBe('nb.ipynb');
+      expect(getActionPattern('Other', { foo: 'bar' })).toContain('foo');
+      expect(getActionDescription('Other', { foo: 'bar' })).toContain('foo');
     });
 
     it('stores null original content when pre-hook stat fails', async () => {
-      mockPlugin = createMockPlugin({ permissionMode: 'yolo' });
-      service = new ClaudianService(mockPlugin);
-      (service as any).vaultPath = '/test/vault/path';
-
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (fs.statSync as jest.Mock).mockImplementation(() => { throw new Error('boom'); });
 
-      const preHook = (service as any).createFileHashPreHook();
+      // Create hooks using the exported functions
+      const originalContents = new Map<string, DiffContentEntry>();
+      const pendingDiffData = new Map<string, ToolDiffData>();
+      const vaultPath = '/test/vault/path';
+
+      const preHook = createFileHashPreHook(vaultPath, originalContents);
       await preHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'bad.md' } }, 'tool-bad');
 
-      expect((service as any).originalContents.get('tool-bad')?.content).toBeNull();
+      expect(originalContents.get('tool-bad')?.content).toBeNull();
+
+      const postHook = createFileHashPostHook(vaultPath, originalContents, pendingDiffData);
+      await postHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'bad.md' }, tool_result: {} }, 'tool-bad');
+      expect(pendingDiffData.get('tool-bad')).toEqual({ filePath: 'bad.md', skippedReason: 'unavailable' });
     });
 
     it('skips diff when post-hook lacks original entry or hits read error', async () => {
-      mockPlugin = createMockPlugin({ permissionMode: 'yolo' });
-      service = new ClaudianService(mockPlugin);
-      (service as any).vaultPath = '/test/vault/path';
-
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (fs.statSync as jest.Mock).mockReturnValue({ size: 10 });
       (fs.readFileSync as jest.Mock).mockReturnValueOnce('new');
 
-      const postHook = (service as any).createFileHashPostHook();
+      // Create hooks using the exported functions
+      const originalContents = new Map<string, DiffContentEntry>();
+      const pendingDiffData = new Map<string, ToolDiffData>();
+      const vaultPath = '/test/vault/path';
+
+      const postHook = createFileHashPostHook(vaultPath, originalContents, pendingDiffData);
       await postHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'no-orig.md' }, tool_result: {} }, 'tool-no-orig');
-      expect(service.getDiffData('tool-no-orig')).toEqual({ filePath: 'no-orig.md', skippedReason: 'unavailable' });
+      expect(pendingDiffData.get('tool-no-orig')).toEqual({ filePath: 'no-orig.md', skippedReason: 'unavailable' });
 
       // Now force read error in post-hook
-      (service as any).originalContents.set('tool-read-err', { filePath: 'err.md', content: '' });
+      originalContents.set('tool-read-err', { filePath: 'err.md', content: '' });
       (fs.readFileSync as jest.Mock).mockImplementation(() => { throw new Error('boom'); });
 
       await postHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'err.md' }, tool_result: {} }, 'tool-read-err');
-      expect(service.getDiffData('tool-read-err')).toEqual({ filePath: 'err.md', skippedReason: 'unavailable' });
+      expect(pendingDiffData.get('tool-read-err')).toEqual({ filePath: 'err.md', skippedReason: 'unavailable' });
     });
 
     it('marks too_large when post-hook sees large new file', async () => {
-      mockPlugin = createMockPlugin({ permissionMode: 'yolo' });
-      service = new ClaudianService(mockPlugin);
-      (service as any).vaultPath = '/test/vault/path';
-
       (fs.existsSync as jest.Mock).mockReturnValue(false);
-      const preHook = (service as any).createFileHashPreHook();
+
+      // Create hooks using the exported functions
+      const originalContents = new Map<string, DiffContentEntry>();
+      const pendingDiffData = new Map<string, ToolDiffData>();
+      const vaultPath = '/test/vault/path';
+
+      const preHook = createFileHashPreHook(vaultPath, originalContents);
       await preHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'large.md' } }, 'tool-large');
 
       (fs.existsSync as jest.Mock).mockReturnValue(true);
       (fs.statSync as jest.Mock).mockReturnValue({ size: 200 * 1024 });
 
-      const postHook = (service as any).createFileHashPostHook();
+      const postHook = createFileHashPostHook(vaultPath, originalContents, pendingDiffData);
       await postHook.hooks[0]({ tool_name: 'Write', tool_input: { file_path: 'large.md' }, tool_result: {} }, 'tool-large');
 
-      expect(service.getDiffData('tool-large')).toEqual({ filePath: 'large.md', skippedReason: 'too_large' });
+      expect(pendingDiffData.get('tool-large')).toEqual({ filePath: 'large.md', skippedReason: 'too_large' });
     });
   });
 });

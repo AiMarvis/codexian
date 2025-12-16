@@ -5,7 +5,8 @@
  */
 
 import { setIcon } from 'obsidian';
-import { SubagentInfo, ToolCallInfo } from '../types';
+
+import type { SubagentInfo, ToolCallInfo } from '../types';
 import { getToolLabel } from './ToolCallRenderer';
 
 /** State for a streaming subagent block. */

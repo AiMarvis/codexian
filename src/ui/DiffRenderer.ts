@@ -236,6 +236,7 @@ export function diffLinesToHtml(diffLines: DiffLine[], contextLines = 3): string
 /** Check if content appears to be binary. */
 export function isBinaryContent(content: string): boolean {
   // Check for null bytes or high ratio of non-printable characters
+  // eslint-disable-next-line no-control-regex
   const nonPrintable = content.match(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g);
   if (nonPrintable && nonPrintable.length > content.length * 0.1) {
     return true;

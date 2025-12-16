@@ -5,64 +5,67 @@
  * tool call rendering, conversation management, and file/image context.
  */
 
-import { ItemView, WorkspaceLeaf, MarkdownRenderer, setIcon, Notice } from 'obsidian';
-import * as fs from 'fs';
-import * as path from 'path';
-import type ClaudianPlugin from './main';
-import { VIEW_TYPE_CLAUDIAN, ChatMessage, StreamChunk, ToolCallInfo, ContentBlock, ClaudeModel, ThinkingBudget, DEFAULT_THINKING_BUDGET, DEFAULT_CLAUDE_MODELS, ImageAttachment, SubagentInfo } from './types';
-import { AsyncSubagentManager } from './AsyncSubagentManager';
-import { getVaultPath, isCommandBlocked, appendMarkdownSnippet } from './utils';
-import { readCachedImageBase64 } from './imageCache';
+import type { WorkspaceLeaf } from 'obsidian';
+import { ItemView, MarkdownRenderer, Notice, setIcon } from 'obsidian';
 
-import {
-  ApprovalModal,
-  createInputToolbar,
-  ModelSelector,
-  ThinkingBudgetSelector,
-  PermissionToggle,
-  FileContextManager,
-  ImageContextManager,
-  renderToolCall,
-  updateToolCallResult,
-  renderStoredToolCall,
-  isBlockedToolResult,
-  createThinkingBlock,
-  appendThinkingContent,
-  finalizeThinkingBlock,
-  cleanupThinkingBlock,
-  renderStoredThinkingBlock,
-  type ThinkingBlockState,
-  parseTodoInput,
-  renderTodoList,
-  renderStoredTodoList,
-  // Sync subagent
-  createSubagentBlock,
-  addSubagentToolCall,
-  updateSubagentToolResult,
-  finalizeSubagentBlock,
-  renderStoredSubagent,
-  type SubagentState,
-  // Async subagent
-  createAsyncSubagentBlock,
-  updateAsyncSubagentRunning,
-  finalizeAsyncSubagent,
-  markAsyncSubagentOrphaned,
-  renderStoredAsyncSubagent,
-  type AsyncSubagentState,
-  // Write/Edit diff renderer
-  createWriteEditBlock,
-  updateWriteEditWithDiff,
-  finalizeWriteEditBlock,
-  renderStoredWriteEdit,
-  type WriteEditState,
-  // Slash commands
-  SlashCommandManager,
-  SlashCommandDropdown,
-  // Instruction mode
-  InstructionModeManager,
-  InstructionModal,
-} from './ui';
+import { AsyncSubagentManager } from './AsyncSubagentManager';
+import { getImageAttachmentDataUri } from './images/imageLoader';
 import { InstructionRefineService } from './InstructionRefineService';
+import type ClaudianPlugin from './main';
+import { isWriteEditTool, TOOL_AGENT_OUTPUT, TOOL_BASH, TOOL_TASK, TOOL_TODO_WRITE } from './tools/toolNames';
+import {
+  type ChatMessage,
+  type ClaudeModel,
+  DEFAULT_CLAUDE_MODELS,
+  DEFAULT_THINKING_BUDGET,
+  type ImageAttachment,
+  type StreamChunk,
+  type SubagentInfo,
+  type ThinkingBudget,
+  type ToolCallInfo,
+  VIEW_TYPE_CLAUDIAN,
+} from './types';
+import type { AsyncSubagentState, ModelSelector, PermissionToggle, SubagentState, ThinkingBlockState, ThinkingBudgetSelector, WriteEditState } from './ui';
+import {
+  formatSlashCommandWarnings,
+} from './ui';
+import {
+  addSubagentToolCall,
+  appendThinkingContent,
+  ApprovalModal,
+  cleanupThinkingBlock,
+  createAsyncSubagentBlock,
+  createInputToolbar,
+  createSubagentBlock,
+  createThinkingBlock,
+  createWriteEditBlock,
+  FileContextManager,
+  finalizeAsyncSubagent,
+  finalizeSubagentBlock,
+  finalizeThinkingBlock,
+  finalizeWriteEditBlock,
+  ImageContextManager,
+  InstructionModal,
+  InstructionModeManager,
+  isBlockedToolResult,
+  markAsyncSubagentOrphaned,
+  parseTodoInput,
+  renderStoredAsyncSubagent,
+  renderStoredSubagent,
+  renderStoredThinkingBlock,
+  renderStoredTodoList,
+  renderStoredToolCall,
+  renderStoredWriteEdit,
+  renderTodoList,
+  renderToolCall,
+  SlashCommandDropdown,
+  SlashCommandManager,
+  updateAsyncSubagentRunning,
+  updateSubagentToolResult,
+  updateToolCallResult,
+  updateWriteEditWithDiff,
+} from './ui';
+import { appendMarkdownSnippet, getVaultPath, isCommandBlocked, prependContextFiles } from './utils';
 
 /** Main sidebar chat view for interacting with Claude. */
 export class ClaudianView extends ItemView {
@@ -218,6 +221,7 @@ export class ClaudianView extends ItemView {
         onFileOpen: async () => {},
       }
     );
+    this.plugin.agentService.setFileEditTracker(this.fileContextManager);
 
     this.imageContextManager = new ImageContextManager(
       this.plugin.app,
@@ -356,6 +360,7 @@ export class ClaudianView extends ItemView {
     cleanupThinkingBlock(this.currentThinkingState);
     this.currentThinkingState = null;
     this.plugin.agentService.setApprovalCallback(null);
+    this.plugin.agentService.setFileEditTracker(null);
     this.fileContextManager?.destroy();
     this.slashCommandDropdown?.destroy();
     this.slashCommandDropdown = null;
@@ -383,7 +388,7 @@ export class ClaudianView extends ItemView {
     // Check for slash command and expand it
     // displayContent: what user sees in chat (e.g., "/tests")
     // content: what gets sent to agent (expanded prompt)
-    let displayContent = content;
+    const displayContent = content;
     let queryOptions: { allowedTools?: string[]; model?: string } | undefined;
     if (content && this.slashCommandManager) {
       // Refresh commands from settings to pick up any changes
@@ -447,14 +452,8 @@ export class ClaudianView extends ItemView {
     let contextFilesForMessage: string[] | undefined;
 
     if (filesChanged) {
-      if (currentFiles.length > 0) {
-        const fileList = currentFiles.join(', ');
-        promptToSend = `Context files: [${fileList}]\n\n${content}`;
-        contextFilesForMessage = currentFiles;
-      } else {
-        promptToSend = `Context files: []\n\n${content}`;
-        contextFilesForMessage = [];
-      }
+      promptToSend = prependContextFiles(content, currentFiles);
+      contextFilesForMessage = currentFiles;
     }
 
     this.fileContextManager?.markFilesSent();
@@ -676,7 +675,7 @@ export class ClaudianView extends ItemView {
         }
         this.finalizeCurrentTextBlock(msg);
 
-        if (chunk.name === 'Task') {
+        if (chunk.name === TOOL_TASK) {
           const isAsync = this.asyncSubagentManager.isAsyncTask(chunk.input);
           if (isAsync) {
             await this.handleAsyncTaskToolUse(chunk, msg);
@@ -686,7 +685,7 @@ export class ClaudianView extends ItemView {
           break;
         }
 
-        if (chunk.name === 'AgentOutputTool') {
+        if (chunk.name === TOOL_AGENT_OUTPUT) {
           this.handleAgentOutputToolUse(chunk, msg);
           break;
         }
@@ -705,7 +704,7 @@ export class ClaudianView extends ItemView {
           msg.contentBlocks = msg.contentBlocks || [];
           msg.contentBlocks.push({ type: 'tool_use', toolId: chunk.id });
 
-          if (chunk.name === 'TodoWrite') {
+          if (chunk.name === TOOL_TODO_WRITE) {
             const todos = parseTodoInput(chunk.input);
             if (todos) {
               const todoEl = renderTodoList(this.currentContentEl!, todos, true);
@@ -714,7 +713,7 @@ export class ClaudianView extends ItemView {
             } else {
               renderToolCall(this.currentContentEl!, toolCall, this.toolCallElements, this.plugin.settings.toolCallExpandedByDefault);
             }
-          } else if (chunk.name === 'Write' || chunk.name === 'Edit') {
+          } else if (isWriteEditTool(chunk.name)) {
             const state = createWriteEditBlock(this.currentContentEl!, toolCall);
             this.writeEditStates.set(chunk.id, state);
             this.toolCallElements.set(chunk.id, state.wrapperEl);
@@ -754,7 +753,7 @@ export class ClaudianView extends ItemView {
           existingToolCall.result = chunk.content;
 
           const writeEditState = this.writeEditStates.get(chunk.id);
-          if (writeEditState && (existingToolCall.name === 'Write' || existingToolCall.name === 'Edit')) {
+          if (writeEditState && isWriteEditTool(existingToolCall.name)) {
             if (!chunk.isError && !isBlocked) {
               const diffData = this.plugin.agentService.getDiffData(chunk.id);
               if (diffData) {
@@ -1007,7 +1006,7 @@ export class ClaudianView extends ItemView {
   private onAsyncSubagentStateChange(subagent: SubagentInfo): void {
     const state = this.asyncSubagentStates.get(subagent.id);
     if (!state) {
-      for (const [id, s] of this.asyncSubagentStates) {
+      for (const s of this.asyncSubagentStates.values()) {
         if (s.info.agentId === subagent.agentId) {
           this.updateAsyncSubagentUI(s, subagent);
           return;
@@ -1102,7 +1101,7 @@ export class ClaudianView extends ItemView {
   }
 
   private async showFullImage(image: ImageAttachment) {
-    const dataUri = await this.getImageDataUri(image);
+    const dataUri = getImageAttachmentDataUri(this.plugin.app, image);
     if (!dataUri) return;
 
     const overlay = document.body.createDiv({ cls: 'claudian-image-modal-overlay' });
@@ -1137,50 +1136,12 @@ export class ClaudianView extends ItemView {
   }
 
   private async setImageSrc(imgEl: HTMLImageElement, image: ImageAttachment) {
-    const dataUri = await this.getImageDataUri(image);
+    const dataUri = getImageAttachmentDataUri(this.plugin.app, image);
     if (dataUri) {
       imgEl.setAttribute('src', dataUri);
     } else {
       imgEl.setAttribute('alt', `${image.name} (missing)`);
     }
-  }
-
-  private async getImageDataUri(image: ImageAttachment): Promise<string | null> {
-    const base64 = await this.loadImageBase64(image);
-    if (!base64) return null;
-    return `data:${image.mediaType};base64,${base64}`;
-  }
-
-  private async loadImageBase64(image: ImageAttachment): Promise<string | null> {
-    if (image.data) return image.data;
-
-    if (image.cachePath) {
-      const cached = readCachedImageBase64(this.plugin.app, image.cachePath);
-      if (cached) {
-        image.data = cached;
-        return cached;
-      }
-    }
-
-    if (image.filePath) {
-      const vaultPath = getVaultPath(this.plugin.app);
-      const absPath = path.isAbsolute(image.filePath)
-        ? image.filePath
-        : (vaultPath ? path.join(vaultPath, image.filePath) : null);
-
-      if (absPath && fs.existsSync(absPath)) {
-        try {
-          const buffer = fs.readFileSync(absPath);
-          const base64 = buffer.toString('base64');
-          image.data = base64;
-          return base64;
-        } catch {
-          return null;
-        }
-      }
-    }
-
-    return null;
   }
 
   private async renderContent(el: HTMLElement, markdown: string) {
@@ -1360,10 +1321,10 @@ export class ClaudianView extends ItemView {
             const toolCall = msg.toolCalls?.find(tc => tc.id === block.toolId);
             if (toolCall) {
               // Special rendering for TodoWrite
-              if (toolCall.name === 'TodoWrite') {
+              if (toolCall.name === TOOL_TODO_WRITE) {
                 renderStoredTodoList(contentEl, toolCall.input);
               // Special rendering for Write/Edit with diff
-              } else if (toolCall.name === 'Write' || toolCall.name === 'Edit') {
+              } else if (isWriteEditTool(toolCall.name)) {
                 renderStoredWriteEdit(contentEl, toolCall);
               } else {
                 renderStoredToolCall(contentEl, toolCall);
@@ -1391,10 +1352,10 @@ export class ClaudianView extends ItemView {
         if (msg.toolCalls && this.plugin.settings.showToolUse) {
           for (const toolCall of msg.toolCalls) {
             // Special rendering for TodoWrite
-            if (toolCall.name === 'TodoWrite') {
+            if (toolCall.name === TOOL_TODO_WRITE) {
               renderStoredTodoList(contentEl, toolCall.input);
             // Special rendering for Write/Edit with diff
-            } else if (toolCall.name === 'Write' || toolCall.name === 'Edit') {
+            } else if (isWriteEditTool(toolCall.name)) {
               renderStoredWriteEdit(contentEl, toolCall);
             } else {
               renderStoredToolCall(contentEl, toolCall);
@@ -1578,7 +1539,7 @@ export class ClaudianView extends ItemView {
     return new Promise((resolve) => {
       const modal = new ApprovalModal(
         this.plugin.app,
-        'Bash',
+        TOOL_BASH,
         { command },
         description,
         (decision) => resolve(decision === 'allow' || decision === 'allow-always'),
@@ -1587,11 +1548,4 @@ export class ClaudianView extends ItemView {
       modal.open();
     });
   }
-}
-
-function formatSlashCommandWarnings(errors: string[]): string {
-  const maxItems = 3;
-  const head = errors.slice(0, maxItems);
-  const more = errors.length > maxItems ? `\n...and ${errors.length - maxItems} more` : '';
-  return `Slash command expansion warnings:\n- ${head.join('\n- ')}${more}`;
 }

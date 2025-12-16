@@ -3,10 +3,12 @@
  */
 
 import * as fs from 'fs';
+
+// eslint-disable-next-line jest/no-mocks-import
 import {
-  setMockMessages,
-  resetMockMessages,
   getLastOptions,
+  resetMockMessages,
+  setMockMessages,
 } from './__mocks__/claude-agent-sdk';
 
 // Mock fs module
@@ -103,8 +105,9 @@ describe('InstructionRefineService', () => {
   describe('vault restriction hook', () => {
     beforeEach(() => {
       const normalizePath = (p: string) => {
-        const path = require('path');
-        return path.resolve(p);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const pathModule = require('path');
+        return pathModule.resolve(p);
       };
       (fs.realpathSync as any) = jest.fn(normalizePath);
       if (fs.realpathSync) {

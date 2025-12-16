@@ -5,26 +5,157 @@
  * session persistence, permission modes, and security hooks.
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import { query, type Options, type CanUseTool, type PermissionResult, type HookCallbackMatcher } from '@anthropic-ai/claude-agent-sdk';
-import type ClaudianPlugin from './main';
+import type { CanUseTool, Options, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
+import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
+
 import {
-  StreamChunk,
-  ChatMessage,
-  ToolCallInfo,
-  SDKMessage,
-  THINKING_BUDGETS,
+  createBlocklistHook,
+  createFileHashPostHook,
+  createFileHashPreHook,
+  createVaultRestrictionHook,
+  type DiffContentEntry,
+  type FileEditPostCallback,
+  type FileEditPreCallback,
+} from './hooks';
+import { hydrateImagesData } from './images/imageLoader';
+import type ClaudianPlugin from './main';
+import { isSessionInitEvent, isStreamChunk, transformSDKMessage } from './sdk/MessageTransformer';
+import {
+  ApprovalManager,
+  getActionDescription,
+} from './security';
+import { buildSystemPrompt } from './systemPrompt';
+import type {
   ApprovedAction,
+  ChatMessage,
+  ClaudeModel,
   ImageAttachment,
+  StreamChunk,
   ToolDiffData,
 } from './types';
-import { buildSystemPrompt } from './systemPrompt';
-import { getVaultPath, parseEnvironmentVariables, findClaudeCLIPath, isPathWithinVault as isPathWithinVaultUtil, isPathInAllowedExportPaths, isCommandBlocked } from './utils';
-import { readCachedImageBase64 } from './imageCache';
+import { THINKING_BUDGETS } from './types';
+import {
+  buildContextFromHistory,
+  findClaudeCLIPath,
+  getLastUserMessage,
+  getVaultPath,
+  isPathInAllowedExportPaths,
+  isPathWithinVault as isPathWithinVaultUtil,
+  isSessionExpiredError,
+  parseEnvironmentVariables,
+  stripContextFilesPrefix,
+} from './utils';
 
-const MAX_DIFF_SIZE = 100 * 1024;
+// ============================================
+// Session Management (inlined)
+// ============================================
+
+interface SessionState {
+  sessionId: string | null;
+  sessionModel: ClaudeModel | null;
+  pendingSessionModel: ClaudeModel | null;
+  wasInterrupted: boolean;
+}
+
+class SessionManager {
+  private state: SessionState = {
+    sessionId: null,
+    sessionModel: null,
+    pendingSessionModel: null,
+    wasInterrupted: false,
+  };
+
+  getSessionId(): string | null {
+    return this.state.sessionId;
+  }
+
+  setSessionId(id: string | null, defaultModel?: ClaudeModel): void {
+    this.state.sessionId = id;
+    this.state.sessionModel = id ? (defaultModel ?? null) : null;
+  }
+
+  wasInterrupted(): boolean {
+    return this.state.wasInterrupted;
+  }
+
+  markInterrupted(): void {
+    this.state.wasInterrupted = true;
+  }
+
+  clearInterrupted(): void {
+    this.state.wasInterrupted = false;
+  }
+
+  setPendingModel(model: ClaudeModel): void {
+    this.state.pendingSessionModel = model;
+  }
+
+  clearPendingModel(): void {
+    this.state.pendingSessionModel = null;
+  }
+
+  captureSession(sessionId: string): void {
+    this.state.sessionId = sessionId;
+    this.state.sessionModel = this.state.pendingSessionModel;
+    this.state.pendingSessionModel = null;
+  }
+
+  needsSessionReset(requestedModel: ClaudeModel, defaultModel: ClaudeModel): boolean {
+    if (!this.state.sessionId) {
+      return false;
+    }
+    const activeModel = this.state.sessionModel ?? defaultModel;
+    return requestedModel !== activeModel;
+  }
+
+  invalidateSession(): void {
+    this.state.sessionId = null;
+    this.state.sessionModel = null;
+  }
+
+  reset(): void {
+    this.state = {
+      sessionId: null,
+      sessionModel: null,
+      pendingSessionModel: null,
+      wasInterrupted: false,
+    };
+  }
+}
+
+// ============================================
+// Diff Storage (inlined)
+// ============================================
+
+class DiffStore {
+  private originalContents = new Map<string, DiffContentEntry>();
+  private pendingDiffData = new Map<string, ToolDiffData>();
+
+  getOriginalContents(): Map<string, DiffContentEntry> {
+    return this.originalContents;
+  }
+
+  getPendingDiffData(): Map<string, ToolDiffData> {
+    return this.pendingDiffData;
+  }
+
+  getDiffData(toolUseId: string): ToolDiffData | undefined {
+    const data = this.pendingDiffData.get(toolUseId);
+    if (data) {
+      this.pendingDiffData.delete(toolUseId);
+    }
+    return data;
+  }
+
+  clear(): void {
+    this.originalContents.clear();
+    this.pendingDiffData.clear();
+  }
+}
+
+// ============================================
+// SDK Content Types
+// ============================================
 
 interface TextContentBlock {
   type: 'text';
@@ -40,13 +171,19 @@ interface ImageContentBlock {
   };
 }
 
-type ContentBlock = TextContentBlock | ImageContentBlock;
+type SDKContentBlock = TextContentBlock | ImageContentBlock;
 
 export type ApprovalCallback = (
   toolName: string,
   input: Record<string, unknown>,
   description: string
 ) => Promise<'allow' | 'allow-always' | 'deny'>;
+
+export interface FileEditTracker {
+  markFileBeingEdited(toolName: string, toolInput: Record<string, unknown>): Promise<void>;
+  trackEditedFile(toolName: string | undefined, toolInput: Record<string, unknown> | undefined, isError: boolean): Promise<void>;
+  cancelFileEdit(toolName: string, toolInput: Record<string, unknown>): void;
+}
 
 /** Options for query execution with optional overrides. */
 export interface QueryOptions {
@@ -58,19 +195,29 @@ export interface QueryOptions {
 export class ClaudianService {
   private plugin: ClaudianPlugin;
   private abortController: AbortController | null = null;
-  private sessionId: string | null = null;
-  private sessionModel: string | null = null;
-  private pendingSessionModel: string | null = null;
-  private wasInterrupted = false;
   private resolvedClaudePath: string | null = null;
   private approvalCallback: ApprovalCallback | null = null;
-  private sessionApprovedActions: ApprovedAction[] = [];
+  private fileEditTracker: FileEditTracker | null = null;
   private vaultPath: string | null = null;
-  private originalContents: Map<string, { filePath: string; content: string | null }> = new Map();
-  private pendingDiffData: Map<string, ToolDiffData> = new Map();
+
+  // Modular components
+  private sessionManager = new SessionManager();
+  private approvalManager: ApprovalManager;
+  private diffStore = new DiffStore();
 
   constructor(plugin: ClaudianPlugin) {
     this.plugin = plugin;
+
+    // Initialize approval manager with access to persistent approvals
+    this.approvalManager = new ApprovalManager(
+      () => this.plugin.settings.approvedActions
+    );
+
+    // Set up persistence callback for permanent approvals
+    this.approvalManager.setPersistCallback(async (action: ApprovedAction) => {
+      this.plugin.settings.approvedActions.push(action);
+      await this.plugin.saveSettings();
+    });
   }
 
   private findClaudeCLI(): string | null {
@@ -78,7 +225,12 @@ export class ClaudianService {
   }
 
   /** Sends a query to Claude and streams the response. */
-  async *query(prompt: string, images?: ImageAttachment[], conversationHistory?: ChatMessage[], queryOptions?: QueryOptions): AsyncGenerator<StreamChunk> {
+  async *query(
+    prompt: string,
+    images?: ImageAttachment[],
+    conversationHistory?: ChatMessage[],
+    queryOptions?: QueryOptions
+  ): AsyncGenerator<StreamChunk> {
     const vaultPath = getVaultPath(this.plugin.app);
     if (!vaultPath) {
       yield { type: 'error', content: 'Could not determine vault path' };
@@ -96,28 +248,26 @@ export class ClaudianService {
 
     this.abortController = new AbortController();
 
-    const hydratedImages = await this.hydrateImagesData(images, vaultPath);
+    const hydratedImages = await hydrateImagesData(this.plugin.app, images, vaultPath);
 
     // After interruption, session is broken - rebuild context proactively
     let queryPrompt = prompt;
-    if (this.wasInterrupted && conversationHistory && conversationHistory.length > 0) {
-      const historyContext = this.buildContextFromHistory(conversationHistory);
+    if (this.sessionManager.wasInterrupted() && conversationHistory && conversationHistory.length > 0) {
+      const historyContext = buildContextFromHistory(conversationHistory);
       if (historyContext) {
         queryPrompt = `${historyContext}\n\nUser: ${prompt}`;
       }
-      this.sessionId = null; // Force fresh session
-      this.sessionModel = null;
-      this.wasInterrupted = false;
+      this.sessionManager.invalidateSession();
+      this.sessionManager.clearInterrupted();
     }
 
     // If a command overrides the model, avoid resuming a potentially incompatible session.
     const requestedModel = queryOptions?.model || this.plugin.settings.model;
-    const activeSessionModel = this.sessionModel ?? this.plugin.settings.model;
-    if (this.sessionId && requestedModel !== activeSessionModel) {
+    if (this.sessionManager.needsSessionReset(requestedModel, this.plugin.settings.model)) {
       if (conversationHistory && conversationHistory.length > 0) {
-        const historyContext = this.buildContextFromHistory(conversationHistory);
-        const lastUserMessage = this.getLastUserMessage(conversationHistory);
-        const actualPrompt = prompt.replace(/^Context files: \[.*?\]\n\n/, '');
+        const historyContext = buildContextFromHistory(conversationHistory);
+        const lastUserMessage = getLastUserMessage(conversationHistory);
+        const actualPrompt = stripContextFilesPrefix(prompt);
         const shouldAppendPrompt = !lastUserMessage || lastUserMessage.content.trim() !== actualPrompt.trim();
         queryPrompt = historyContext
           ? shouldAppendPrompt
@@ -126,20 +276,18 @@ export class ClaudianService {
           : prompt;
       }
 
-      this.sessionId = null;
-      this.sessionModel = null;
+      this.sessionManager.invalidateSession();
     }
 
     try {
       yield* this.queryViaSDK(queryPrompt, vaultPath, hydratedImages, queryOptions);
     } catch (error) {
-      if (this.isSessionExpiredError(error) && conversationHistory && conversationHistory.length > 0) {
-        this.sessionId = null;
-        this.sessionModel = null;
+      if (isSessionExpiredError(error) && conversationHistory && conversationHistory.length > 0) {
+        this.sessionManager.invalidateSession();
 
-        const historyContext = this.buildContextFromHistory(conversationHistory);
-        const lastUserMessage = this.getLastUserMessage(conversationHistory);
-        const actualPrompt = prompt.replace(/^Context files: \[.*?\]\n\n/, '');
+        const historyContext = buildContextFromHistory(conversationHistory);
+        const lastUserMessage = getLastUserMessage(conversationHistory);
+        const actualPrompt = stripContextFilesPrefix(prompt);
         const shouldAppendPrompt = !lastUserMessage || lastUserMessage.content.trim() !== actualPrompt.trim();
         const fullPrompt = historyContext
           ? shouldAppendPrompt
@@ -147,7 +295,7 @@ export class ClaudianService {
             : historyContext
           : prompt;
 
-        const retryImages = await this.hydrateImagesData(lastUserMessage?.images, vaultPath);
+        const retryImages = await hydrateImagesData(this.plugin.app, lastUserMessage?.images, vaultPath);
 
         try {
           yield* this.queryViaSDK(fullPrompt, vaultPath, retryImages, queryOptions);
@@ -165,172 +313,16 @@ export class ClaudianService {
     }
   }
 
-  /** Builds conversation context from message history for session recovery. */
-  private buildContextFromHistory(messages: ChatMessage[]): string {
-    const parts: string[] = [];
-
-    for (const message of messages) {
-      if (message.role !== 'user' && message.role !== 'assistant') {
-        continue;
-      }
-
-      if (message.role === 'assistant') {
-        const hasContent = message.content && message.content.trim().length > 0;
-        const hasToolResult = message.toolCalls?.some(tc => tc.result && tc.result.trim().length > 0);
-        if (!hasContent && !hasToolResult) {
-          continue;
-        }
-      }
-
-      const role = message.role === 'user' ? 'User' : 'Assistant';
-      const lines: string[] = [];
-      const content = message.content?.trim();
-      const contextLine = this.formatContextLine(message);
-      const userPayload = contextLine
-        ? content
-          ? `${contextLine}\n\n${content}`
-          : contextLine
-        : content;
-      lines.push(userPayload ? `${role}: ${userPayload}` : `${role}:`);
-
-      if (message.role === 'assistant' && message.toolCalls?.length) {
-        const toolLines = message.toolCalls
-          .map(tc => this.formatToolCallForContext(tc))
-          .filter(Boolean) as string[];
-        if (toolLines.length > 0) {
-          lines.push(...toolLines);
-        }
-      }
-
-      parts.push(lines.join('\n'));
-    }
-
-    return parts.join('\n\n');
-  }
-
-  /** Checks if an error indicates session needs recovery. */
-  private isSessionExpiredError(error: unknown): boolean {
-    const msg = error instanceof Error ? error.message.toLowerCase() : '';
-    return msg.includes('session expired') ||
-           msg.includes('session not found') ||
-           msg.includes('invalid session') ||
-           msg.includes('session invalid') ||
-           msg.includes('process exited with code') ||
-           (msg.includes('session') && msg.includes('expired')) ||
-           (msg.includes('resume') && (msg.includes('failed') || msg.includes('error')));
-  }
-
-  private getLastUserMessage(messages: ChatMessage[]): ChatMessage | undefined {
-    for (let i = messages.length - 1; i >= 0; i--) {
-      if (messages[i].role === 'user') {
-        return messages[i];
-      }
-    }
-    return undefined;
-  }
-
-  private formatToolCallForContext(toolCall: ToolCallInfo): string {
-    const status = toolCall.status ?? 'completed';
-    const base = `[Tool ${toolCall.name} status=${status}]`;
-    const hasResult = typeof toolCall.result === 'string' && toolCall.result.trim().length > 0;
-
-    if (!hasResult) {
-      return base;
-    }
-
-    const result = this.truncateToolResultForContext(toolCall.result as string);
-    return `${base} result: ${result}`;
-  }
-
-  /**
-   * Truncate tool result to avoid overloading recovery prompt
-   */
-  private truncateToolResultForContext(result: string, maxLength = 800): string {
-    if (result.length > maxLength) {
-      return `${result.slice(0, maxLength)}... (truncated)`;
-    }
-    return result;
-  }
-
-  /**
-   * Format a context line for user messages when rebuilding history
-   */
-  private formatContextLine(message: ChatMessage): string | null {
-    if (!message.contextFiles) {
-      return null;
-    }
-    const fileList = message.contextFiles.join(', ');
-    return `Context files: [${fileList}]`;
-  }
-
-  /**
-   * Ensure images have base64 data loaded from cache or file paths
-   */
-  private async hydrateImagesData(images?: ImageAttachment[], vaultPath?: string | null): Promise<ImageAttachment[] | undefined> {
-    if (!images || images.length === 0) return undefined;
-
-    const hydrated: ImageAttachment[] = [];
-
-    for (const image of images) {
-      if (image.data) {
-        hydrated.push(image);
-        continue;
-      }
-
-      const base64 = await this.loadImageBase64(image, vaultPath);
-      if (base64) {
-        hydrated.push({ ...image, data: base64 });
-      }
-    }
-
-    return hydrated.length > 0 ? hydrated : undefined;
-  }
-
-  private async loadImageBase64(image: ImageAttachment, vaultPath?: string | null): Promise<string | null> {
-    if (image.cachePath) {
-      const base64 = readCachedImageBase64(this.plugin.app, image.cachePath);
-      if (base64) return base64;
-    }
-
-    if (image.filePath) {
-      const absPath = this.resolveImagePath(image.filePath, vaultPath);
-      if (absPath && fs.existsSync(absPath)) {
-        try {
-          const buffer = fs.readFileSync(absPath);
-          return buffer.toString('base64');
-        } catch {
-          return null;
-        }
-      }
-    }
-
-    return null;
-  }
-
-  private resolveImagePath(filePath: string, vaultPath?: string | null): string | null {
-    if (path.isAbsolute(filePath)) {
-      return filePath;
-    }
-    if (vaultPath) {
-      return path.join(vaultPath, filePath);
-    }
-    return null;
-  }
-
   /**
    * Build a prompt with images as content blocks
-   * If no images, returns the string prompt directly
-   * If images present, returns an async generator yielding the message
    */
   private buildPromptWithImages(prompt: string, images?: ImageAttachment[]): string | AsyncGenerator<any> {
-    // If no images, return plain string prompt
     const validImages = (images || []).filter(img => !!img.data);
     if (validImages.length === 0) {
       return prompt;
     }
 
-    // Build content blocks array - images first, then text
-    const content: ContentBlock[] = [];
+    const content: SDKContentBlock[] = [];
 
     // Add image blocks first (Claude recommends images before text)
     for (const image of validImages) {
@@ -352,7 +344,6 @@ export class ClaudianService {
       });
     }
 
-    // Return async generator for SDK
     async function* messageGenerator() {
       yield {
         type: 'user',
@@ -366,14 +357,16 @@ export class ClaudianService {
     return messageGenerator();
   }
 
-  private async *queryViaSDK(prompt: string, cwd: string, images?: ImageAttachment[], queryOptions?: QueryOptions): AsyncGenerator<StreamChunk> {
-    // Use model from queryOptions if provided, otherwise use settings
+  private async *queryViaSDK(
+    prompt: string,
+    cwd: string,
+    images?: ImageAttachment[],
+    queryOptions?: QueryOptions
+  ): AsyncGenerator<StreamChunk> {
     const selectedModel = queryOptions?.model || this.plugin.settings.model;
     const permissionMode = this.plugin.settings.permissionMode;
 
-    this.pendingSessionModel = selectedModel;
-
-    // Store vault path for restriction checks
+    this.sessionManager.setPendingModel(selectedModel);
     this.vaultPath = cwd;
 
     // Parse custom environment variables from settings
@@ -396,36 +389,60 @@ export class ClaudianService {
       abortController: this.abortController ?? undefined,
       pathToClaudeCodeExecutable: this.resolvedClaudePath!,
       env: {
-        ...process.env,     // Inherit current environment
-        ...customEnv,       // Override with user's custom variables
+        ...process.env,
+        ...customEnv,
       },
     };
 
     // Create hooks for security enforcement
-    const securityHooks: HookCallbackMatcher[] = [
-      this.createBlocklistHook(),
-      this.createVaultRestrictionHook(),
-    ];
+    const blocklistHook = createBlocklistHook(() => ({
+      blockedCommands: this.plugin.settings.blockedCommands,
+      enableBlocklist: this.plugin.settings.enableBlocklist,
+    }));
+
+    const vaultRestrictionHook = createVaultRestrictionHook({
+      isPathWithinVault: (p) => this.isPathWithinVault(p),
+      isAllowedExportPath: (p) => this.isAllowedExportPath(p),
+      onEditBlocked: (toolName, toolInput) => {
+        this.fileEditTracker?.cancelFileEdit(toolName, toolInput);
+      },
+    });
+
+    // Create file tracking callbacks
+    const preCallback: FileEditPreCallback | undefined = this.fileEditTracker
+      ? { markFileBeingEdited: (name, input) => this.fileEditTracker!.markFileBeingEdited(name, input) }
+      : undefined;
+
+    const postCallback: FileEditPostCallback | undefined = this.fileEditTracker
+      ? { trackEditedFile: (name, input, isError) => this.fileEditTracker!.trackEditedFile(name, input, isError) }
+      : undefined;
 
     // Create file hash tracking hooks
-    const fileHashPreHook = this.createFileHashPreHook();
-    const fileHashPostHook = this.createFileHashPostHook();
+    const fileHashPreHook = createFileHashPreHook(
+      this.vaultPath,
+      this.diffStore.getOriginalContents(),
+      preCallback
+    );
+    const fileHashPostHook = createFileHashPostHook(
+      this.vaultPath,
+      this.diffStore.getOriginalContents(),
+      this.diffStore.getPendingDiffData(),
+      postCallback
+    );
 
     // Apply permission mode
     if (permissionMode === 'yolo') {
-      // YOLO mode: bypass permissions but use hooks to enforce blocklist and vault restriction
       options.permissionMode = 'bypassPermissions';
       options.allowDangerouslySkipPermissions = true;
       options.hooks = {
-        PreToolUse: [...securityHooks, fileHashPreHook],
+        PreToolUse: [blocklistHook, vaultRestrictionHook, fileHashPreHook],
         PostToolUse: [fileHashPostHook],
       };
     } else {
-      // Safe mode: use hooks for security, canUseTool for approvals
       options.permissionMode = 'default';
       options.canUseTool = this.createSafeModeCallback();
       options.hooks = {
-        PreToolUse: [...securityHooks, fileHashPreHook],
+        PreToolUse: [blocklistHook, vaultRestrictionHook, fileHashPreHook],
         PostToolUse: [fileHashPostHook],
       };
     }
@@ -443,213 +460,64 @@ export class ClaudianService {
     }
 
     // Resume previous session if we have a session ID
-    if (this.sessionId) {
-      options.resume = this.sessionId;
+    const sessionId = this.sessionManager.getSessionId();
+    if (sessionId) {
+      options.resume = sessionId;
     }
 
     try {
-      const response = query({ prompt: queryPrompt, options });
+      const response = agentQuery({ prompt: queryPrompt, options });
 
       for await (const message of response) {
-        // Check for cancellation
         if (this.abortController?.signal.aborted) {
           await response.interrupt();
           break;
         }
 
-        // transformSDKMessage now yields multiple chunks
-        for (const chunk of this.transformSDKMessage(message)) {
-          yield chunk;
+        for (const event of transformSDKMessage(message)) {
+          if (isSessionInitEvent(event)) {
+            this.sessionManager.captureSession(event.sessionId);
+          } else if (isStreamChunk(event)) {
+            yield event;
+          }
         }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Unknown error';
       yield { type: 'error', content: msg };
     } finally {
-      this.pendingSessionModel = null;
+      this.sessionManager.clearPendingModel();
     }
 
     yield { type: 'done' };
   }
 
-  /**
-   * Transform SDK message to our StreamChunk format
-   * Returns an array since one SDK message can contain multiple chunks
-   * (e.g., assistant message with both text and tool_use blocks)
-   *
-   * SDK Message Types:
-   * - 'system' - init, status, etc.
-   * - 'assistant' - assistant response with content blocks (text, tool_use)
-   * - 'user' - user messages, includes tool_use_result for tool outputs
-   * - 'stream_event' - streaming deltas
-   * - 'result' - final result
-   */
-  private *transformSDKMessage(message: SDKMessage): Generator<StreamChunk> {
-    // Capture parent_tool_use_id for subagent routing
-    // null = main agent, non-null = subagent context
-    const parentToolUseId = message.parent_tool_use_id ?? null;
-
-    switch (message.type) {
-      case 'system':
-        // Capture session ID from init message
-        if (message.subtype === 'init' && message.session_id) {
-          this.sessionId = message.session_id;
-          this.sessionModel = this.pendingSessionModel;
-          this.pendingSessionModel = null;
-        }
-        // Don't yield system messages to the UI
-        break;
-
-      case 'assistant':
-        // Extract ALL content blocks - text, tool_use, and thinking
-        if (message.message?.content && Array.isArray(message.message.content)) {
-          for (const block of message.message.content) {
-            if (block.type === 'thinking' && block.thinking) {
-              yield { type: 'thinking', content: block.thinking, parentToolUseId };
-            } else if (block.type === 'text' && block.text) {
-              yield { type: 'text', content: block.text, parentToolUseId };
-            } else if (block.type === 'tool_use') {
-              yield {
-                type: 'tool_use',
-                id: block.id || `tool-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
-                name: block.name || 'unknown',
-                input: block.input || {},
-                parentToolUseId,
-              };
-            }
-          }
-        }
-        break;
-
-      case 'user':
-        // Check for blocked tool calls (from hook denials)
-        if ((message as any)._blocked && (message as any)._blockReason) {
-          yield {
-            type: 'blocked',
-            content: (message as any)._blockReason,
-          };
-          break;
-        }
-        // User messages can contain tool results
-        if (message.tool_use_result !== undefined && message.parent_tool_use_id) {
-          yield {
-            type: 'tool_result',
-            id: message.parent_tool_use_id,
-            content: typeof message.tool_use_result === 'string'
-              ? message.tool_use_result
-              : JSON.stringify(message.tool_use_result, null, 2),
-            isError: false,
-            parentToolUseId,
-          };
-        }
-        // Also check message.message.content for tool_result blocks
-        if (message.message?.content && Array.isArray(message.message.content)) {
-          for (const block of message.message.content) {
-            if (block.type === 'tool_result') {
-              yield {
-                type: 'tool_result',
-                id: block.tool_use_id || message.parent_tool_use_id || '',
-                content: typeof block.content === 'string'
-                  ? block.content
-                  : JSON.stringify(block.content, null, 2),
-                isError: block.is_error || false,
-                parentToolUseId,
-              };
-            }
-          }
-        }
-        break;
-
-      case 'stream_event':
-        // Handle streaming events for real-time updates
-        const event = message.event;
-        if (event?.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
-          yield {
-            type: 'tool_use',
-            id: event.content_block.id || `tool-${Date.now()}`,
-            name: event.content_block.name || 'unknown',
-            input: event.content_block.input || {},
-            parentToolUseId,
-          };
-        } else if (event?.type === 'content_block_start' && event.content_block?.type === 'thinking') {
-          if (event.content_block.thinking) {
-            yield { type: 'thinking', content: event.content_block.thinking, parentToolUseId };
-          }
-        } else if (event?.type === 'content_block_start' && event.content_block?.type === 'text') {
-          if (event.content_block.text) {
-            yield { type: 'text', content: event.content_block.text, parentToolUseId };
-          }
-        } else if (event?.type === 'content_block_delta') {
-          if (event.delta?.type === 'thinking_delta' && event.delta.thinking) {
-            yield { type: 'thinking', content: event.delta.thinking, parentToolUseId };
-          } else if (event.delta?.type === 'text_delta' && event.delta.text) {
-            yield { type: 'text', content: event.delta.text, parentToolUseId };
-          }
-        }
-        break;
-
-      case 'result':
-        // Final result - no text to extract, result is a string summary
-        break;
-
-      case 'error':
-        if (message.error) {
-          yield { type: 'error', content: message.error };
-        }
-        break;
-    }
-  }
-
-  /**
-   * Check if a bash command should be blocked
-   */
-  private shouldBlockCommand(command: string): boolean {
-    return isCommandBlocked(command, this.plugin.settings.blockedCommands, this.plugin.settings.enableBlocklist);
-  }
-
-  /**
-   * Cancel the current query
-   */
+  /** Cancel the current query. */
   cancel() {
     if (this.abortController) {
       this.abortController.abort();
-      this.wasInterrupted = true;
+      this.sessionManager.markInterrupted();
     }
   }
 
-  /**
-   * Reset the conversation session
-   * Call this when clearing the chat to start fresh
-   */
+  /** Reset the conversation session. */
   resetSession() {
-    this.sessionId = null;
-    this.sessionModel = null;
-    this.pendingSessionModel = null;
-    this.wasInterrupted = false;
-    // Clear session-scoped approved actions
-    this.sessionApprovedActions = [];
-    // Clear diff-related state
-    this.clearDiffState();
+    this.sessionManager.reset();
+    this.approvalManager.clearSessionApprovals();
+    this.diffStore.clear();
   }
 
-  /**
-   * Get the current session ID
-   */
+  /** Get the current session ID. */
   getSessionId(): string | null {
-    return this.sessionId;
+    return this.sessionManager.getSessionId();
   }
 
-  /**
-   * Set the session ID (for restoring from saved conversation)
-   */
+  /** Set the session ID (for restoring from saved conversation). */
   setSessionId(id: string | null): void {
-    this.sessionId = id;
-    this.sessionModel = id ? this.plugin.settings.model : null;
+    this.sessionManager.setSessionId(id, this.plugin.settings.model);
   }
 
-  /**
-   * Cleanup resources
-   */
+  /** Cleanup resources. */
   cleanup() {
     this.cancel();
     this.resetSession();
@@ -660,461 +528,51 @@ export class ClaudianService {
     this.approvalCallback = callback;
   }
 
-  /** Creates PreToolUse hook to enforce the command blocklist. */
-  private createBlocklistHook(): HookCallbackMatcher {
-    return {
-      matcher: 'Bash',
-      hooks: [
-        async (hookInput, toolUseID, options) => {
-          const input = hookInput as {
-            tool_name: string;
-            tool_input: { command?: string };
-          };
-          const command = input.tool_input?.command || '';
-
-          if (this.shouldBlockCommand(command)) {
-            // Use hookSpecificOutput with permissionDecision: 'deny' to block
-            return {
-              continue: false,
-              hookSpecificOutput: {
-                hookEventName: 'PreToolUse' as const,
-                permissionDecision: 'deny' as const,
-                permissionDecisionReason: `Command blocked by blocklist: ${command}`,
-              },
-            };
-          }
-
-          return { continue: true };
-        },
-      ],
-    };
+  /** Sets the file edit tracker for syncing edit state with the UI. */
+  setFileEditTracker(tracker: FileEditTracker | null) {
+    this.fileEditTracker = tracker;
   }
 
-  /** Creates PreToolUse hook to restrict file access to the vault. */
-  private createVaultRestrictionHook(): HookCallbackMatcher {
-    const fileTools = ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'LS', 'NotebookEdit', 'Bash'];
-    const editTools = ['Write', 'Edit', 'NotebookEdit'];
+  /** Get pending diff data for a tool_use_id (and remove it from pending). */
+  getDiffData(toolUseId: string): ToolDiffData | undefined {
+    return this.diffStore.getDiffData(toolUseId);
+  }
 
-    return {
-      hooks: [
-        async (hookInput, toolUseID, options) => {
-          const input = hookInput as {
-            tool_name: string;
-            tool_input: Record<string, unknown>;
-          };
-
-          const toolName = input.tool_name;
-
-          // Bash: inspect command for paths that escape the vault
-          if (toolName === 'Bash') {
-            const command = (input.tool_input?.command as string) || '';
-            const violation = this.findBashCommandPathViolation(command);
-            if (violation) {
-              const reason =
-                violation.type === 'export_path_read'
-                  ? `Access denied: Command path "${violation.path}" is in an allowed export directory, but export paths are write-only.`
-                  : `Access denied: Command path "${violation.path}" is outside the vault. Agent is restricted to vault directory only.`;
-              return {
-                continue: false,
-                hookSpecificOutput: {
-                  hookEventName: 'PreToolUse' as const,
-                  permissionDecision: 'deny' as const,
-                  permissionDecisionReason: reason,
-                },
-              };
-            }
-            return { continue: true };
-          }
-
-          // Skip if not a file-related tool
-          if (!fileTools.includes(toolName)) {
-            return { continue: true };
-          }
-
-          // Get the path from tool input
-          const filePath = this.getPathFromToolInput(toolName, input.tool_input);
-
-          if (filePath && !this.isPathWithinVault(filePath)) {
-            // Allow write operations to allowed export paths
-            if (editTools.includes(toolName) && this.isAllowedExportPath(filePath)) {
-              return { continue: true };
-            }
-
-            // BUG FIX #5: Clean up edit state when blocking Write/Edit/NotebookEdit
-            if (editTools.includes(toolName)) {
-              this.plugin.getView()?.fileContextManager?.cancelFileEdit(toolName, input.tool_input);
-            }
-            return {
-              continue: false,
-              hookSpecificOutput: {
-                hookEventName: 'PreToolUse' as const,
-                permissionDecision: 'deny' as const,
-                permissionDecisionReason: `Access denied: Path "${filePath}" is outside the vault. Agent is restricted to vault directory only.`,
-              },
-            };
-          }
-
-          return { continue: true };
-        },
-      ],
-    };
+  /** Clear all diff-related state. */
+  clearDiffState(): void {
+    this.diffStore.clear();
   }
 
   /**
-   * Extract file path from tool input based on tool type
-   */
-  private getPathFromToolInput(toolName: string, toolInput: Record<string, unknown>): string | null {
-    switch (toolName) {
-      case 'Read':
-      case 'Write':
-      case 'Edit':
-      case 'NotebookEdit':
-        return (toolInput.file_path as string) || (toolInput.notebook_path as string) || null;
-      case 'Glob':
-      case 'Grep':
-        return (toolInput.path as string) || (toolInput.pattern as string) || null;
-      case 'LS':
-        return (toolInput.path as string) || null;
-      default:
-        return null;
-    }
-  }
-
-  /**
-   * Check if a path is within the vault directory
+   * Check if a path is within the vault directory.
    */
   private isPathWithinVault(filePath: string): boolean {
-    if (!this.vaultPath) return true; // No restriction if vault path not set
-
+    if (!this.vaultPath) return true;
     return isPathWithinVaultUtil(filePath, this.vaultPath);
   }
 
   /**
-   * Check if a path is within the allowed export paths
+   * Check if a path is within the allowed export paths.
    */
   private isAllowedExportPath(filePath: string): boolean {
     if (!this.vaultPath) return false;
-
     const allowedPaths = this.plugin.settings.allowedExportPaths;
     return isPathInAllowedExportPaths(filePath, allowedPaths, this.vaultPath);
   }
 
   /**
-   * Find the first command path that escapes the vault, if any
-   * Allows write-target paths that are in the allowed export paths
-   */
-  private findBashCommandPathViolation(command: string):
-    | { type: 'outside_vault'; path: string }
-    | { type: 'export_path_read'; path: string }
-    | null {
-    if (!command || !this.vaultPath) return null;
-
-    const tokens = this.tokenizeBashCommand(command);
-    const segments = this.splitBashTokensIntoSegments(tokens);
-
-    for (const segment of segments) {
-      const violation = this.findBashPathViolationInSegment(segment);
-      if (violation) {
-        return violation;
-      }
-    }
-
-    return null;
-  }
-
-  /**
-   * Split a bash command into tokens.
-   * This is a best-effort tokenizer (quotes/backticks are handled; full bash parsing is out of scope).
-   */
-  private tokenizeBashCommand(command: string): string[] {
-    const tokens: string[] = [];
-    const tokenRegex = /(['"`])(.*?)\1|[^\s]+/g;
-    let match: RegExpExecArray | null;
-
-    while ((match = tokenRegex.exec(command)) !== null) {
-      const token = match[2] ?? match[0];
-      const cleaned = token.trim();
-      if (!cleaned) continue;
-      tokens.push(cleaned);
-    }
-
-    return tokens;
-  }
-
-  /**
-   * Split tokens into segments by common bash operators.
-   * Each segment is treated as an independent command for output-target heuristics.
-   */
-  private splitBashTokensIntoSegments(tokens: string[]): string[][] {
-    const separators = new Set(['&&', '||', ';', '|']);
-    const segments: string[][] = [];
-    let current: string[] = [];
-
-    for (const token of tokens) {
-      if (separators.has(token)) {
-        if (current.length > 0) {
-          segments.push(current);
-          current = [];
-        }
-        continue;
-      }
-      current.push(token);
-    }
-
-    if (current.length > 0) {
-      segments.push(current);
-    }
-
-    return segments;
-  }
-
-  private getBashSegmentCommandName(segment: string[]): { cmdName: string; cmdIndex: number } {
-    const wrappers = new Set(['command', 'env', 'sudo']);
-    let cmdIndex = 0;
-    while (cmdIndex < segment.length && wrappers.has(segment[cmdIndex])) {
-      cmdIndex += 1;
-    }
-
-    const rawCmd = segment[cmdIndex] || '';
-    const cmdName = path.basename(rawCmd);
-    return { cmdName, cmdIndex };
-  }
-
-  private isBashOutputRedirectOperator(token: string): boolean {
-    return token === '>' || token === '>>' || token === '1>' || token === '1>>' || token === '2>' || token === '2>>' || token === '&>' || token === '&>>' || token === '>|';
-  }
-
-  private isBashInputRedirectOperator(token: string): boolean {
-    return token === '<' || token === '<<' || token === '0<' || token === '0<<';
-  }
-
-  private isBashOutputOptionExpectingValue(token: string): boolean {
-    return token === '-o' || token === '--output' || token === '--out' || token === '--outfile' || token === '--output-file';
-  }
-
-  private cleanPathToken(raw: string): string | null {
-    let token = raw.trim();
-    if (!token) return null;
-
-    // Strip surrounding quotes/backticks if present.
-    if (
-      (token.startsWith('"') && token.endsWith('"')) ||
-      (token.startsWith("'") && token.endsWith("'")) ||
-      (token.startsWith('`') && token.endsWith('`'))
-    ) {
-      token = token.slice(1, -1).trim();
-    }
-
-    // Trim common delimiters from shells / subshells.
-    while (token.startsWith('(') || token.startsWith('[') || token.startsWith('{')) {
-      token = token.slice(1).trim();
-    }
-    while (
-      token.endsWith(')') ||
-      token.endsWith(']') ||
-      token.endsWith('}') ||
-      token.endsWith(';') ||
-      token.endsWith(',')
-    ) {
-      token = token.slice(0, -1).trim();
-    }
-
-    if (!token) return null;
-    if (token === '.' || token === '/') return null;
-    return token;
-  }
-
-  private isPathLikeToken(token: string): boolean {
-    const cleaned = token.trim();
-    if (!cleaned) return false;
-    if (cleaned === '.' || cleaned === '/' || cleaned === '--') return false;
-
-    return (
-      cleaned.startsWith('~/') ||
-      cleaned.startsWith('./') ||
-      cleaned.startsWith('../') ||
-      cleaned.startsWith('..') ||
-      cleaned.startsWith('/') ||
-      cleaned.includes('/') ||
-      cleaned.includes('\\')
-    );
-  }
-
-  private checkBashPathAccess(candidate: string, access: 'read' | 'write'):
-    | { type: 'outside_vault'; path: string }
-    | { type: 'export_path_read'; path: string }
-    | null {
-    const cleaned = this.cleanPathToken(candidate);
-    if (!cleaned) return null;
-
-    const normalized = cleaned.startsWith('~/')
-      ? path.join(os.homedir(), cleaned.slice(2))
-      : cleaned;
-
-    if (this.isPathWithinVault(normalized)) {
-      return null;
-    }
-
-    if (this.isAllowedExportPath(normalized)) {
-      if (access === 'write') {
-        return null;
-      }
-      return { type: 'export_path_read', path: cleaned };
-    }
-
-    return { type: 'outside_vault', path: cleaned };
-  }
-
-  private findBashPathViolationInSegment(segment: string[]):
-    | { type: 'outside_vault'; path: string }
-    | { type: 'export_path_read'; path: string }
-    | null {
-    if (segment.length === 0) return null;
-
-    const { cmdName, cmdIndex } = this.getBashSegmentCommandName(segment);
-
-    // Some commands have a clear destination argument that should be treated as a write target.
-    const destinationCommands = new Set(['cp', 'mv', 'rsync']);
-    let destinationTokenIndex: number | null = null;
-    if (destinationCommands.has(cmdName)) {
-      const pathArgIndices: number[] = [];
-      let seenDoubleDash = false;
-
-      for (let i = cmdIndex + 1; i < segment.length; i += 1) {
-        const token = segment[i];
-
-        if (!seenDoubleDash && token === '--') {
-          seenDoubleDash = true;
-          continue;
-        }
-
-        // Skip options (best-effort).
-        if (!seenDoubleDash && token.startsWith('-')) {
-          continue;
-        }
-
-        if (this.isPathLikeToken(token)) {
-          pathArgIndices.push(i);
-        }
-      }
-
-      if (pathArgIndices.length > 0) {
-        destinationTokenIndex = pathArgIndices[pathArgIndices.length - 1];
-      }
-    }
-
-    let expectWriteNext = false;
-
-    for (let i = 0; i < segment.length; i += 1) {
-      const token = segment[i];
-
-      // Standalone redirection operators.
-      if (this.isBashOutputRedirectOperator(token)) {
-        expectWriteNext = true;
-        continue;
-      }
-      if (this.isBashInputRedirectOperator(token)) {
-        expectWriteNext = false;
-        continue;
-      }
-
-      // Standalone output options.
-      if (this.isBashOutputOptionExpectingValue(token)) {
-        expectWriteNext = true;
-        continue;
-      }
-
-      // Embedded redirection operators, e.g. ">/tmp/out", "2>>~/Desktop/log".
-      const embeddedOutputRedirect = token.match(/^(?:&>>|&>|\d*>>|\d*>\||\d*>|>>|>\||>)(.+)$/);
-      if (embeddedOutputRedirect) {
-        const violation = this.checkBashPathAccess(embeddedOutputRedirect[1], 'write');
-        if (violation) return violation;
-        continue;
-      }
-
-      const embeddedInputRedirect = token.match(/^(?:\d*<<|\d*<|<<|<)(.+)$/);
-      if (embeddedInputRedirect) {
-        const violation = this.checkBashPathAccess(embeddedInputRedirect[1], 'read');
-        if (violation) return violation;
-        continue;
-      }
-
-      // Embedded output options, e.g. "--output=/tmp/out", "-o/tmp/out", "-o~/Desktop/out".
-      const embeddedLongOutput = token.match(/^--(?:output|out|outfile|output-file)=(.+)$/);
-      if (embeddedLongOutput) {
-        const violation = this.checkBashPathAccess(embeddedLongOutput[1], 'write');
-        if (violation) return violation;
-        continue;
-      }
-
-      const embeddedShortOutput = token.match(/^-o(.+)$/);
-      if (embeddedShortOutput) {
-        const violation = this.checkBashPathAccess(embeddedShortOutput[1], 'write');
-        if (violation) return violation;
-        continue;
-      }
-
-      // Generic KEY=VALUE where VALUE looks like a path.
-      // We treat this as a read access since it is ambiguous and can be used to smuggle paths.
-      const eqIndex = token.indexOf('=');
-      if (eqIndex > 0) {
-        const key = token.slice(0, eqIndex);
-        const value = token.slice(eqIndex + 1);
-        if (key.startsWith('-') && this.isPathLikeToken(value)) {
-          const violation = this.checkBashPathAccess(value, 'read');
-          if (violation) return violation;
-        }
-      }
-
-      if (!this.isPathLikeToken(token)) {
-        expectWriteNext = false;
-        continue;
-      }
-
-      const access: 'read' | 'write' =
-        i === destinationTokenIndex || expectWriteNext ? 'write' : 'read';
-
-      const violation = this.checkBashPathAccess(token, access);
-      if (violation) return violation;
-
-      expectWriteNext = false;
-    }
-
-    return null;
-  }
-
-  /**
-   * Naive tokenizer to pull out path-like segments from a bash command
-   */
-  private extractPathCandidates(command: string): string[] {
-    const candidates: string[] = [];
-    const seen = new Set<string>();
-
-    for (const token of this.tokenizeBashCommand(command)) {
-      if (!this.isPathLikeToken(token)) continue;
-      if (seen.has(token)) continue;
-      seen.add(token);
-      candidates.push(token);
-    }
-
-    return candidates;
-  }
-
-  /**
-   * Create callback for Safe mode - check approved actions, then prompt user
-   * Note: Blocklist is enforced by PreToolUse hook, not here
+   * Create callback for Safe mode - check approved actions, then prompt user.
    */
   private createSafeModeCallback(): CanUseTool {
-    return async (toolName, input, options): Promise<PermissionResult> => {
+    return async (toolName, input): Promise<PermissionResult> => {
       // Check if action is pre-approved
-      if (this.isActionApproved(toolName, input)) {
+      if (this.approvalManager.isActionApproved(toolName, input)) {
         return { behavior: 'allow', updatedInput: input };
       }
 
       // If no approval callback is set, deny the action
       if (!this.approvalCallback) {
-        // BUG FIX #5: Clean up edit state when denying permission
-        this.plugin.getView()?.fileContextManager?.cancelFileEdit(toolName, input);
+        this.fileEditTracker?.cancelFileEdit(toolName, input);
         return {
           behavior: 'deny',
           message: 'No approval handler available. Please enable YOLO mode or configure permissions.',
@@ -1122,15 +580,14 @@ export class ClaudianService {
       }
 
       // Generate description for the user
-      const description = this.getActionDescription(toolName, input);
+      const description = getActionDescription(toolName, input);
 
       // Request approval from the user
       try {
         const decision = await this.approvalCallback(toolName, input, description);
 
         if (decision === 'deny') {
-          // BUG FIX #5: Clean up edit state when user denies permission
-          this.plugin.getView()?.fileContextManager?.cancelFileEdit(toolName, input);
+          this.fileEditTracker?.cancelFileEdit(toolName, input);
           return {
             behavior: 'deny',
             message: 'User denied this action.',
@@ -1140,15 +597,14 @@ export class ClaudianService {
 
         // Approve the action and potentially save to memory
         if (decision === 'allow-always') {
-          await this.approveAction(toolName, input, 'always');
+          await this.approvalManager.approveAction(toolName, input, 'always');
         } else if (decision === 'allow') {
-          await this.approveAction(toolName, input, 'session');
+          await this.approvalManager.approveAction(toolName, input, 'session');
         }
 
         return { behavior: 'allow', updatedInput: input };
-      } catch (error) {
-        // BUG FIX #5: Clean up edit state when approval fails
-        this.plugin.getView()?.fileContextManager?.cancelFileEdit(toolName, input);
+      } catch {
+        this.fileEditTracker?.cancelFileEdit(toolName, input);
         return {
           behavior: 'deny',
           message: 'Approval request failed.',
@@ -1156,255 +612,5 @@ export class ClaudianService {
         };
       }
     };
-  }
-
-  /**
-   * Check if an action is pre-approved (either session or permanent)
-   */
-  private isActionApproved(toolName: string, input: Record<string, unknown>): boolean {
-    const pattern = this.getActionPattern(toolName, input);
-
-    // Check session-scoped approvals
-    const sessionApproved = this.sessionApprovedActions.some(
-      action => action.toolName === toolName && this.matchesPattern(toolName, pattern, action.pattern)
-    );
-    if (sessionApproved) return true;
-
-    // Check permanent approvals
-    const permanentApproved = this.plugin.settings.approvedActions.some(
-      action => action.toolName === toolName && this.matchesPattern(toolName, pattern, action.pattern)
-    );
-    return permanentApproved;
-  }
-
-  /**
-   * Add an action to the approved list
-   */
-  async approveAction(toolName: string, input: Record<string, unknown>, scope: 'session' | 'always'): Promise<void> {
-    const pattern = this.getActionPattern(toolName, input);
-    const action: ApprovedAction = {
-      toolName,
-      pattern,
-      approvedAt: Date.now(),
-      scope,
-    };
-
-    if (scope === 'session') {
-      this.sessionApprovedActions.push(action);
-    } else {
-      this.plugin.settings.approvedActions.push(action);
-      await this.plugin.saveSettings();
-    }
-  }
-
-  /**
-   * Generate a pattern from tool input for matching
-   */
-  private getActionPattern(toolName: string, input: Record<string, unknown>): string {
-    switch (toolName) {
-      case 'Bash':
-        return typeof input.command === 'string' ? input.command.trim() : '';
-      case 'Read':
-      case 'Write':
-      case 'Edit':
-        return (input.file_path as string) || '*';
-      case 'NotebookEdit':
-        return (input.notebook_path as string) || (input.file_path as string) || '*';
-      case 'Glob':
-        return (input.pattern as string) || '*';
-      case 'Grep':
-        return (input.pattern as string) || '*';
-      default:
-        return JSON.stringify(input);
-    }
-  }
-
-  /**
-   * Check if a pattern matches an approved pattern
-   * Currently uses exact match, can be enhanced with glob support
-   */
-  private matchesPattern(toolName: string, actionPattern: string, approvedPattern: string): boolean {
-    if (toolName === 'Bash') {
-      return actionPattern === approvedPattern;
-    }
-
-    // Wildcard matches everything
-    if (approvedPattern === '*') return true;
-
-    // Exact match
-    if (actionPattern === approvedPattern) return true;
-
-    // Check if approved pattern is a prefix (for file paths)
-    if (actionPattern.startsWith(approvedPattern)) return true;
-
-    return false;
-  }
-
-  /**
-   * Generate a human-readable description of the action
-   */
-  private getActionDescription(toolName: string, input: Record<string, unknown>): string {
-    switch (toolName) {
-      case 'Bash':
-        return `Run command: ${input.command}`;
-      case 'Read':
-        return `Read file: ${input.file_path}`;
-      case 'Write':
-        return `Write to file: ${input.file_path}`;
-      case 'Edit':
-        return `Edit file: ${input.file_path}`;
-      case 'Glob':
-        return `Search files matching: ${input.pattern}`;
-      case 'Grep':
-        return `Search content matching: ${input.pattern}`;
-      default:
-        return `${toolName}: ${JSON.stringify(input)}`;
-    }
-  }
-
-  /**
-   * Create PreToolUse hook to capture original file hash and content before editing
-   */
-  private createFileHashPreHook(): HookCallbackMatcher {
-    return {
-      matcher: 'Write|Edit|NotebookEdit',
-      hooks: [
-        async (hookInput, toolUseId) => {
-          const input = hookInput as {
-            tool_name: string;
-            tool_input: Record<string, unknown>;
-          };
-
-          // Capture original content for diff (Write/Edit only, not NotebookEdit)
-          if (input.tool_name === 'Write' || input.tool_name === 'Edit') {
-            const rawPath = input.tool_input.file_path;
-            const filePath = typeof rawPath === 'string' && rawPath ? rawPath : undefined;
-
-            if (filePath && this.vaultPath && toolUseId) {
-              const fullPath = path.isAbsolute(filePath)
-                ? filePath
-                : path.join(this.vaultPath, filePath);
-              try {
-                // Read original content (null if file doesn't exist)
-                if (fs.existsSync(fullPath)) {
-                  const stats = fs.statSync(fullPath);
-                  // Limit to 100KB to prevent memory issues
-                  if (stats.size <= MAX_DIFF_SIZE) {
-                    const content = fs.readFileSync(fullPath, 'utf-8');
-                    this.originalContents.set(toolUseId, { filePath, content });
-                  } else {
-                    // File too large for diff
-                    this.originalContents.set(toolUseId, { filePath, content: null });
-                  }
-                } else {
-                  // New file
-                  this.originalContents.set(toolUseId, { filePath, content: '' });
-                }
-              } catch {
-                this.originalContents.set(toolUseId, { filePath, content: null });
-              }
-            }
-          }
-
-          await this.plugin.getView()?.fileContextManager?.markFileBeingEdited(
-            input.tool_name,
-            input.tool_input
-          );
-          return { continue: true };
-        },
-      ],
-    };
-  }
-
-  /**
-   * Create PostToolUse hook to store post-edit hash and compute diff after tool completion
-   */
-  private createFileHashPostHook(): HookCallbackMatcher {
-    return {
-      matcher: 'Write|Edit|NotebookEdit',
-      hooks: [
-        async (hookInput, toolUseId) => {
-          const input = hookInput as {
-            tool_name: string;
-            tool_input: Record<string, unknown>;
-            tool_result?: { is_error?: boolean };
-          };
-          const isError = input.tool_result?.is_error ?? false;
-
-          // Compute diff for Write/Edit (if not error)
-          if ((input.tool_name === 'Write' || input.tool_name === 'Edit') && toolUseId) {
-            const originalEntry = this.originalContents.get(toolUseId);
-            const rawPath = input.tool_input.file_path;
-            const filePath = typeof rawPath === 'string' && rawPath ? rawPath : originalEntry?.filePath;
-
-            if (!isError && filePath && this.vaultPath) {
-              const fullPath = path.isAbsolute(filePath)
-                ? filePath
-                : path.join(this.vaultPath, filePath);
-
-              let diffData: ToolDiffData | undefined;
-
-              // If original was too large/unavailable, propagate skip reason
-              if (originalEntry?.content === null) {
-                diffData = { filePath, skippedReason: 'too_large' };
-              } else {
-                try {
-                  if (fs.existsSync(fullPath)) {
-                    const stats = fs.statSync(fullPath);
-                    if (stats.size <= MAX_DIFF_SIZE) {
-                      const newContent = fs.readFileSync(fullPath, 'utf-8');
-                      if (originalEntry && originalEntry.content !== undefined) {
-                        diffData = { filePath, originalContent: originalEntry.content, newContent };
-                      } else {
-                        diffData = { filePath, skippedReason: 'unavailable' };
-                      }
-                    } else {
-                      diffData = { filePath, skippedReason: 'too_large' };
-                    }
-                  } else {
-                    diffData = { filePath, skippedReason: 'unavailable' };
-                  }
-                } catch {
-                  diffData = { filePath, skippedReason: 'unavailable' };
-                }
-              }
-
-              if (diffData) {
-                this.pendingDiffData.set(toolUseId, diffData);
-              }
-            }
-
-            // Clean up original content map regardless of success/error
-            this.originalContents.delete(toolUseId);
-          }
-
-          await this.plugin.getView()?.fileContextManager?.trackEditedFile(
-            input.tool_name,
-            input.tool_input,
-            isError
-          );
-          return { continue: true };
-        },
-      ],
-    };
-  }
-
-  /**
-   * Get pending diff data for a tool_use_id (and remove it from pending)
-   */
-  getDiffData(toolUseId: string): ToolDiffData | undefined {
-    const data = this.pendingDiffData.get(toolUseId);
-    if (data) {
-      this.pendingDiffData.delete(toolUseId);
-    }
-    return data;
-  }
-
-  /**
-   * Clear all diff-related state (call on session reset)
-   */
-  clearDiffState(): void {
-    this.originalContents.clear();
-    this.pendingDiffData.clear();
   }
 }

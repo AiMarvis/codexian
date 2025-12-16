@@ -1,4 +1,5 @@
-import { FileContextManager, FileContextCallbacks } from '../src/ui/FileContext';
+import type { FileContextCallbacks } from '../src/ui/FileContext';
+import { FileContextManager } from '../src/ui/FileContext';
 
 jest.mock('obsidian', () => ({
   setIcon: jest.fn(),

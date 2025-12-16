@@ -5,25 +5,12 @@
  */
 
 import { setIcon } from 'obsidian';
-import { ToolCallInfo } from '../types';
 
-const TOOL_ICONS: Record<string, string> = {
-  'Read': 'file-text',
-  'Write': 'edit-3',
-  'Edit': 'edit',
-  'Bash': 'terminal',
-  'Glob': 'folder-search',
-  'Grep': 'search',
-  'LS': 'list',
-  'TodoWrite': 'list-checks',
-  'WebSearch': 'globe',
-  'WebFetch': 'download',
-};
+import { getToolIcon } from '../tools/toolIcons';
+import type { ToolCallInfo } from '../types';
 
-/** Get the appropriate icon for a tool. */
-export function getToolIcon(toolName: string): string {
-  return TOOL_ICONS[toolName] || 'wrench';
-}
+// Note: getToolIcon is now exported from src/tools/index.ts
+// This module uses it internally but does not re-export it.
 
 /** Set the tool icon on an element. */
 export function setToolIcon(el: HTMLElement, name: string) {

@@ -170,14 +170,33 @@ Accepted content is appended to the custom system prompt as-is. The agent decide
 src/
 ├── main.ts              # Plugin entry point
 ├── ClaudianView.ts      # Sidebar chat UI, orchestrates components
-├── ClaudianService.ts   # Claude Agent SDK wrapper
+├── ClaudianService.ts   # Claude Agent SDK wrapper (includes session & diff management)
 ├── ClaudianSettings.ts  # Settings tab
 ├── systemPrompt.ts      # System prompt
-├── imageCache.ts        # Image caching utilities
-├── types.ts             # Type definitions
-├── utils.ts             # Utility functions
+├── types.ts             # Type definitions (re-exports from types/)
+├── utils.ts             # Utilities (vault, env, context files, session recovery)
 ├── InlineEditService.ts # Lightweight Claude service for inline editing
 ├── InstructionRefineService.ts # Lightweight Claude service for refining # instructions
+├── AsyncSubagentManager.ts # Async subagent state machine
+├── sdk/                 # SDK integration
+│   └── MessageTransformer.ts # SDK message transformation
+├── hooks/               # SDK PreToolUse/PostToolUse hooks
+│   ├── SecurityHooks.ts      # Blocklist and vault restriction hooks
+│   └── DiffTrackingHooks.ts  # File content capture for diff view
+├── security/            # Security utilities
+│   ├── ApprovalManager.ts    # Tool approval management
+│   ├── BlocklistChecker.ts   # Command blocklist checking
+│   └── BashPathValidator.ts  # Bash command path validation
+├── tools/               # Tool utilities
+│   ├── toolNames.ts          # Tool name constants
+│   ├── toolIcons.ts          # Tool icon mapping
+│   └── toolInput.ts          # Tool input parsing
+├── images/              # Image handling
+│   ├── imageCache.ts         # Image caching with SHA-256 deduplication
+│   └── imageLoader.ts        # Image loading utilities
+├── types/               # Type definitions (modular)
+│   ├── models.ts, settings.ts, chat.ts, tools.ts, sdk.ts
+│   └── index.ts              # Barrel export
 └── ui/                  # Modular UI components
     ├── index.ts              # Barrel export
     ├── ApprovalModal.ts      # Permission approval dialog
@@ -191,10 +210,12 @@ src/
     ├── ThinkingBlockRenderer.ts # Extended thinking UI
     ├── TodoListRenderer.ts   # Todo list UI for task tracking
     ├── SubagentRenderer.ts   # Subagent UI component
+    ├── DiffRenderer.ts       # Diff computation and rendering
+    ├── WriteEditRenderer.ts  # Write/Edit diff blocks
     ├── EnvSnippetManager.ts  # Environment variable snippets
     ├── InlineEditModal.ts    # Inline edit UI (CM6 decorations, diff view)
     ├── InstructionModeManager.ts # # instruction mode detection and UI state
-    └── InstructionConfirmModal.ts # Unified instruction modal (loading/clarification/confirmation)
+    └── InstructionConfirmModal.ts # Unified instruction modal
 ```
 
 ## Roadmap

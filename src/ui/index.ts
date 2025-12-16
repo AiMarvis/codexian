@@ -1,131 +1,116 @@
 /** Claudian UI components - barrel export. */
 
-export { ApprovalModal, type ApprovalDecision } from './ApprovalModal';
-
+export { type ApprovalDecision,ApprovalModal } from './ApprovalModal';
 export {
-  ModelSelector,
-  ThinkingBudgetSelector,
-  PermissionToggle,
-  createInputToolbar,
-  type ToolbarSettings,
-  type ToolbarCallbacks,
-} from './InputToolbar';
-
+  computeLineDiff,
+  countLineChanges,
+  type DiffHunk,
+  type DiffLine,
+  diffLinesToHtml,
+  type DiffStats,
+  isBinaryContent,
+  renderDiffContent,
+  splitIntoHunks,
+} from './DiffRenderer';
 export {
   EnvSnippetManager,
   EnvSnippetModal,
 } from './EnvSnippetManager';
-
 export {
-  FileContextManager,
   type FileContextCallbacks,
+  FileContextManager,
 } from './FileContext';
-
 export {
-  ImageContextManager,
   type ImageContextCallbacks,
+  ImageContextManager,
 } from './ImageContext';
-
 export {
-  getToolIcon,
-  setToolIcon,
-  getToolLabel,
-  formatToolInput,
-  truncateResult,
-  isBlockedToolResult,
-  renderToolCall,
-  updateToolCallResult,
-  renderStoredToolCall,
-} from './ToolCallRenderer';
-
-export {
-  createThinkingBlock,
-  appendThinkingContent,
-  finalizeThinkingBlock,
-  cleanupThinkingBlock,
-  renderStoredThinkingBlock,
-  type ThinkingBlockState,
-  type RenderContentFn,
-} from './ThinkingBlockRenderer';
-
-export {
-  parseTodoInput,
-  renderTodoList,
-  renderStoredTodoList,
-  type TodoItem,
-} from './TodoListRenderer';
-
-export {
-  createSubagentBlock,
-  addSubagentToolCall,
-  updateSubagentToolResult,
-  finalizeSubagentBlock,
-  renderStoredSubagent,
-  type SubagentState,
-} from './SubagentRenderer';
-
-export {
-  createAsyncSubagentBlock,
-  updateAsyncSubagentRunning,
-  finalizeAsyncSubagent,
-  markAsyncSubagentOrphaned,
-  renderStoredAsyncSubagent,
-  type AsyncSubagentState,
-} from './SubagentRenderer';
-
-export {
-  InlineEditModal,
   type InlineEditDecision,
+  InlineEditModal,
 } from './InlineEditModal';
-
 export {
-  computeLineDiff,
-  countLineChanges,
-  splitIntoHunks,
-  renderDiffContent,
-  diffLinesToHtml,
-  isBinaryContent,
-  type DiffLine,
-  type DiffHunk,
-  type DiffStats,
-} from './DiffRenderer';
-
+  createInputToolbar,
+  ModelSelector,
+  PermissionToggle,
+  ThinkingBudgetSelector,
+  type ToolbarCallbacks,
+  type ToolbarSettings,
+} from './InputToolbar';
 export {
-  createWriteEditBlock,
-  updateWriteEditWithDiff,
-  finalizeWriteEditBlock,
-  renderStoredWriteEdit,
-  type WriteEditState,
-} from './WriteEditRenderer';
-
+  type ClarificationSubmitCallback,
+  InstructionClarificationModal,
+  InstructionConfirmModal,
+  type InstructionDecision,
+  InstructionModal,
+  type InstructionModalCallbacks,
+} from './InstructionConfirmModal';
 export {
-  SlashCommandManager,
-  type ExpansionResult,
-  type DetectedCommand,
-} from './SlashCommandManager';
-
+  type InstructionModeCallbacks,
+  InstructionModeManager,
+  type InstructionModeState,
+} from './InstructionModeManager';
 export {
   SlashCommandDropdown,
   type SlashCommandDropdownCallbacks,
   type SlashCommandDropdownOptions,
 } from './SlashCommandDropdown';
-
 export {
-  SlashCommandSettings,
+  type DetectedCommand,
+  type ExpansionResult,
+  SlashCommandManager,
+} from './SlashCommandManager';
+export {
   SlashCommandModal,
+  SlashCommandSettings,
 } from './SlashCommandSettings';
-
 export {
-  InstructionModeManager,
-  type InstructionModeCallbacks,
-  type InstructionModeState,
-} from './InstructionModeManager';
-
+  addSubagentToolCall,
+  createSubagentBlock,
+  finalizeSubagentBlock,
+  renderStoredSubagent,
+  type SubagentState,
+  updateSubagentToolResult,
+} from './SubagentRenderer';
 export {
-  InstructionModal,
-  InstructionConfirmModal,
-  InstructionClarificationModal,
-  type InstructionDecision,
-  type InstructionModalCallbacks,
-  type ClarificationSubmitCallback,
-} from './InstructionConfirmModal';
+  type AsyncSubagentState,
+  createAsyncSubagentBlock,
+  finalizeAsyncSubagent,
+  markAsyncSubagentOrphaned,
+  renderStoredAsyncSubagent,
+  updateAsyncSubagentRunning,
+} from './SubagentRenderer';
+export {
+  appendThinkingContent,
+  cleanupThinkingBlock,
+  createThinkingBlock,
+  finalizeThinkingBlock,
+  type RenderContentFn,
+  renderStoredThinkingBlock,
+  type ThinkingBlockState,
+} from './ThinkingBlockRenderer';
+export {
+  parseTodoInput,
+  renderStoredTodoList,
+  renderTodoList,
+  type TodoItem,
+} from './TodoListRenderer';
+export {
+  formatToolInput,
+  getToolLabel,
+  isBlockedToolResult,
+  renderStoredToolCall,
+  renderToolCall,
+  setToolIcon,
+  truncateResult,
+  updateToolCallResult,
+} from './ToolCallRenderer';
+
+// Note: getToolIcon is exported from src/tools/index.ts instead
+export { formatSlashCommandWarnings } from './formatSlashCommandWarnings';
+export {
+  createWriteEditBlock,
+  finalizeWriteEditBlock,
+  renderStoredWriteEdit,
+  updateWriteEditWithDiff,
+  type WriteEditState,
+} from './WriteEditRenderer';

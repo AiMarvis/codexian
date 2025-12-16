@@ -3,15 +3,16 @@
  */
 
 import { setIcon } from 'obsidian';
-import {
+
+import type {
   ClaudeModel,
-  ThinkingBudget,
   PermissionMode,
+  ThinkingBudget} from '../types';
+import {
   DEFAULT_CLAUDE_MODELS,
-  THINKING_BUDGETS,
-  DEFAULT_THINKING_BUDGET,
+  THINKING_BUDGETS
 } from '../types';
-import { parseEnvironmentVariables, getModelsFromEnvironment } from '../utils';
+import { getModelsFromEnvironment,parseEnvironmentVariables } from '../utils';
 
 /** Settings access interface for toolbar components. */
 export interface ToolbarSettings {

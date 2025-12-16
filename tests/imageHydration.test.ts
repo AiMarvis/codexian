@@ -1,9 +1,10 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
-import { ClaudianService } from '../src/ClaudianService';
-import { saveImageToCache } from '../src/imageCache';
-import { ImageAttachment } from '../src/types';
+import * as path from 'path';
+
+import { saveImageToCache } from '../src/images/imageCache';
+import { hydrateImagesData } from '../src/images/imageLoader';
+import type { ImageAttachment } from '../src/types';
 
 function createMockPlugin(vaultPath: string) {
   return {
@@ -36,11 +37,11 @@ function createTempVault() {
 
 describe('ClaudianService image hydration', () => {
   let vaultPath: string;
-  let service: ClaudianService;
+  let plugin: any;
 
   beforeEach(() => {
     vaultPath = createTempVault();
-    service = new ClaudianService(createMockPlugin(vaultPath));
+    plugin = createMockPlugin(vaultPath);
   });
 
   afterEach(() => {
@@ -49,7 +50,7 @@ describe('ClaudianService image hydration', () => {
 
   it('hydrates base64 from cachePath', async () => {
     const buffer = Buffer.from('cached-image');
-    const cache = saveImageToCache((service as any).plugin.app, buffer, 'image/png', 'cached.png');
+    const cache = saveImageToCache(plugin.app, buffer, 'image/png', 'cached.png');
 
     const images: ImageAttachment[] = [{
       id: 'img-1',
@@ -60,7 +61,7 @@ describe('ClaudianService image hydration', () => {
       source: 'paste',
     }];
 
-    const hydrated = await (service as any).hydrateImagesData(images, vaultPath);
+    const hydrated = await hydrateImagesData(plugin.app, images, vaultPath);
     expect(hydrated).toBeDefined();
     expect(hydrated![0].data).toBe(buffer.toString('base64'));
   });
@@ -80,7 +81,7 @@ describe('ClaudianService image hydration', () => {
       source: 'file',
     }];
 
-    const hydrated = await (service as any).hydrateImagesData(images, vaultPath);
+    const hydrated = await hydrateImagesData(plugin.app, images, vaultPath);
     expect(hydrated).toBeDefined();
     expect(hydrated![0].data).toBe(buffer.toString('base64'));
   });
@@ -96,7 +97,7 @@ describe('ClaudianService image hydration', () => {
       source: 'paste',
     }];
 
-    const hydrated = await (service as any).hydrateImagesData(images, vaultPath);
+    const hydrated = await hydrateImagesData(plugin.app, images, vaultPath);
     expect(hydrated).toBeUndefined();
   });
 });

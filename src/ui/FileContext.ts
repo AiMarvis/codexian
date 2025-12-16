@@ -4,8 +4,11 @@
  * Manages attached files indicator, edited files tracking, and @ mention dropdown.
  */
 
-import { App, TFile, setIcon, EventRef } from 'obsidian';
 import { createHash } from 'crypto';
+import type { App, EventRef } from 'obsidian';
+import { setIcon, TFile } from 'obsidian';
+
+import { isEditTool } from '../tools/toolNames';
 import { getVaultPath } from '../utils';
 
 interface FileHashState {
@@ -163,7 +166,7 @@ export class FileContextManager {
 
   /** Marks a file as being edited (called from PreToolUse hook). */
   async markFileBeingEdited(toolName: string, toolInput: Record<string, unknown>) {
-    if (!['Write', 'Edit', 'NotebookEdit'].includes(toolName)) return;
+    if (!isEditTool(toolName)) return;
 
     const rawPath = (toolInput?.file_path as string) || (toolInput?.notebook_path as string);
     const path = this.normalizePathForVault(rawPath);
@@ -180,7 +183,7 @@ export class FileContextManager {
 
   /** Tracks a file as edited (called from PostToolUse hook). */
   async trackEditedFile(toolName: string | undefined, toolInput: Record<string, unknown> | undefined, isError: boolean) {
-    if (!toolName || !['Write', 'Edit', 'NotebookEdit'].includes(toolName)) return;
+    if (!toolName || !isEditTool(toolName)) return;
 
     const rawPath = (toolInput?.file_path as string) || (toolInput?.notebook_path as string);
     const filePath = this.normalizePathForVault(rawPath);
@@ -232,7 +235,7 @@ export class FileContextManager {
 
   /** Cleans up state for a file when permission was denied. */
   cancelFileEdit(toolName: string, toolInput: Record<string, unknown>) {
-    if (!['Write', 'Edit', 'NotebookEdit'].includes(toolName)) return;
+    if (!isEditTool(toolName)) return;
 
     const rawPath = (toolInput?.file_path as string) || (toolInput?.notebook_path as string);
     const path = this.normalizePathForVault(rawPath);

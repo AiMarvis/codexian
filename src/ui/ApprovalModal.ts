@@ -2,7 +2,10 @@
  * Claudian - Approval modal for Safe mode tool permission prompts.
  */
 
+import type { App } from 'obsidian';
 import { Modal, setIcon } from 'obsidian';
+
+import { getToolIcon } from '../tools/toolIcons';
 
 export type ApprovalDecision = 'allow' | 'allow-always' | 'deny';
 
@@ -20,7 +23,7 @@ export class ApprovalModal extends Modal {
   private options: ApprovalModalOptions;
 
   constructor(
-    app: import('obsidian').App,
+    app: App,
     toolName: string,
     _input: Record<string, unknown>,
     description: string,
@@ -44,7 +47,7 @@ export class ApprovalModal extends Modal {
     const toolEl = infoEl.createDiv({ cls: 'claudian-approval-tool' });
     const iconEl = toolEl.createSpan({ cls: 'claudian-approval-icon' });
     iconEl.setAttribute('aria-hidden', 'true');
-    setIcon(iconEl, this.getToolIcon(this.toolName));
+    setIcon(iconEl, getToolIcon(this.toolName));
     toolEl.createSpan({ text: this.toolName, cls: 'claudian-approval-tool-name' });
 
     const descEl = contentEl.createDiv({ cls: 'claudian-approval-desc' });
@@ -76,19 +79,6 @@ export class ApprovalModal extends Modal {
     }
 
     denyBtn.focus();
-  }
-
-  private getToolIcon(toolName: string): string {
-    const iconMap: Record<string, string> = {
-      'Read': 'file-text',
-      'Write': 'edit-3',
-      'Edit': 'edit',
-      'Bash': 'terminal',
-      'Glob': 'folder-search',
-      'Grep': 'search',
-      'LS': 'list',
-    };
-    return iconMap[toolName] || 'wrench';
   }
 
   private handleDecision(decision: ApprovalDecision) {

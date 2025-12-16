@@ -1,5 +1,5 @@
+import * as imageCache from '../src/images/imageCache';
 import { DEFAULT_SETTINGS, VIEW_TYPE_CLAUDIAN } from '../src/types';
-import * as imageCache from '../src/imageCache';
 
 // Mock fs for ClaudianService
 jest.mock('fs');
@@ -551,7 +551,7 @@ describe('ClaudianPlugin', () => {
 
       await plugin.loadSettings();
 
-      const list = plugin.getConversationList();
+      plugin.getConversationList();
       // Should have cleared the invalid ID
       expect(plugin.getActiveConversation()).toBeNull();
     });

@@ -1,14 +1,13 @@
-import {
-  VIEW_TYPE_CLAUDIAN,
-  DEFAULT_SETTINGS,
-  ClaudianSettings,
+import type {
   ChatMessage,
-  ToolCallInfo,
-  StreamChunk,
+  ClaudianSettings,
   Conversation,
   ConversationMeta,
-  EnvSnippet,
-} from '../src/types';
+  EnvSnippet,  StreamChunk,
+  ToolCallInfo} from '../src/types';
+import {
+  DEFAULT_SETTINGS,
+  VIEW_TYPE_CLAUDIAN} from '../src/types';
 
 describe('types.ts', () => {
   describe('VIEW_TYPE_CLAUDIAN', () => {
@@ -265,9 +264,8 @@ describe('types.ts', () => {
       };
 
       expect(chunk.type).toBe('text');
-      if (chunk.type === 'text') {
-        expect(chunk.content).toBe('Hello world');
-      }
+      // eslint-disable-next-line jest/no-conditional-expect
+      if (chunk.type === 'text') expect(chunk.content).toBe('Hello world');
     });
 
     it('should accept tool_use type', () => {
@@ -280,9 +278,10 @@ describe('types.ts', () => {
 
       expect(chunk.type).toBe('tool_use');
       if (chunk.type === 'tool_use') {
-        expect(chunk.id).toBe('tool-123');
-        expect(chunk.name).toBe('Read');
-        expect(chunk.input).toEqual({ file_path: '/test.txt' });
+        // Type narrowing block - eslint-disable-next-line jest/no-conditional-expect
+        expect(chunk.id).toBe('tool-123'); // eslint-disable-line jest/no-conditional-expect
+        expect(chunk.name).toBe('Read'); // eslint-disable-line jest/no-conditional-expect
+        expect(chunk.input).toEqual({ file_path: '/test.txt' }); // eslint-disable-line jest/no-conditional-expect
       }
     });
 
@@ -295,8 +294,8 @@ describe('types.ts', () => {
 
       expect(chunk.type).toBe('tool_result');
       if (chunk.type === 'tool_result') {
-        expect(chunk.id).toBe('tool-123');
-        expect(chunk.content).toBe('File contents here');
+        expect(chunk.id).toBe('tool-123'); // eslint-disable-line jest/no-conditional-expect
+        expect(chunk.content).toBe('File contents here'); // eslint-disable-line jest/no-conditional-expect
       }
     });
 
@@ -307,9 +306,8 @@ describe('types.ts', () => {
       };
 
       expect(chunk.type).toBe('error');
-      if (chunk.type === 'error') {
-        expect(chunk.content).toBe('Something went wrong');
-      }
+      // eslint-disable-next-line jest/no-conditional-expect
+      if (chunk.type === 'error') expect(chunk.content).toBe('Something went wrong');
     });
 
     it('should accept blocked type', () => {
@@ -319,9 +317,8 @@ describe('types.ts', () => {
       };
 
       expect(chunk.type).toBe('blocked');
-      if (chunk.type === 'blocked') {
-        expect(chunk.content).toBe('Command blocked: rm -rf');
-      }
+      // eslint-disable-next-line jest/no-conditional-expect
+      if (chunk.type === 'blocked') expect(chunk.content).toBe('Command blocked: rm -rf');
     });
 
     it('should accept done type', () => {

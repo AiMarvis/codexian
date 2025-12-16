@@ -1,5 +1,5 @@
 import { AsyncSubagentManager } from '../src/AsyncSubagentManager';
-import { SubagentInfo, ToolCallInfo } from '../src/types';
+import type { SubagentInfo, ToolCallInfo } from '../src/types';
 
 const createManager = () => {
   const updates: SubagentInfo[] = [];

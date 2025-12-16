@@ -4,12 +4,14 @@
  * Manages image attachments via drag/drop, paste, and file path detection.
  */
 
-import { App, setIcon, TFile } from 'obsidian';
 import * as fs from 'fs';
+import type { App } from 'obsidian';
+import { TFile } from 'obsidian';
 import * as path from 'path';
-import { ImageAttachment, ImageMediaType } from '../types';
+
+import { saveImageToCache } from '../images/imageCache';
+import type { ImageAttachment, ImageMediaType } from '../types';
 import { getVaultPath } from '../utils';
-import { saveImageToCache } from '../imageCache';
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
@@ -92,7 +94,7 @@ export class ImageContextManager {
     const patterns = [
       /["']((?:[^"']+\/)?[^"']+\.(?:jpe?g|png|gif|webp))["']/i,
       /((?:\.{0,2}\/)?(?:[^\s"'<>|:*?]+\/)+[^\s"'<>|:*?]+\.(?:jpe?g|png|gif|webp))/i,
-      /\b([^\s"'<>|:*?\/]+\.(?:jpe?g|png|gif|webp))\b/i,
+      /\b([^\s"'<>|:*?/]+\.(?:jpe?g|png|gif|webp))\b/i,
     ];
 
     for (const pattern of patterns) {
@@ -396,7 +398,7 @@ export class ImageContextManager {
     const previewEl = this.imagePreviewEl.createDiv({ cls: 'claudian-image-chip' });
 
     const thumbEl = previewEl.createDiv({ cls: 'claudian-image-thumb' });
-    const imgEl = thumbEl.createEl('img', {
+    thumbEl.createEl('img', {
       attr: {
         src: `data:${image.mediaType};base64,${image.data}`,
         alt: image.name,
@@ -431,7 +433,7 @@ export class ImageContextManager {
     const overlay = document.body.createDiv({ cls: 'claudian-image-modal-overlay' });
     const modal = overlay.createDiv({ cls: 'claudian-image-modal' });
 
-    const img = modal.createEl('img', {
+    modal.createEl('img', {
       attr: {
         src: `data:${image.mediaType};base64,${image.data}`,
         alt: image.name,

@@ -7,6 +7,7 @@
  * - Confirmation (final instruction review)
  */
 
+import type { App } from 'obsidian';
 import { Modal, TextAreaComponent } from 'obsidian';
 
 export type InstructionDecision = 'accept' | 'reject';
@@ -49,7 +50,7 @@ export class InstructionModal extends Modal {
   private editBtnEl: HTMLButtonElement | null = null;
 
   constructor(
-    app: import('obsidian').App,
+    app: App,
     rawInstruction: string,
     callbacks: InstructionModalCallbacks
   ) {
@@ -75,7 +76,7 @@ export class InstructionModal extends Modal {
 
     // Loading state
     this.loadingEl = this.contentSectionEl.createDiv({ cls: 'claudian-instruction-loading' });
-    const spinner = this.loadingEl.createDiv({ cls: 'claudian-instruction-spinner' });
+    this.loadingEl.createDiv({ cls: 'claudian-instruction-spinner' });
     this.loadingEl.createSpan({ text: 'Processing your instruction...' });
 
     // Clarification state (hidden initially)
@@ -162,7 +163,7 @@ export class InstructionModal extends Modal {
   showClarificationLoading() {
     this.isSubmitting = true;
     if (this.loadingEl) {
-      const spinner = this.loadingEl.querySelector('.claudian-instruction-spinner');
+      this.loadingEl.querySelector('.claudian-instruction-spinner');
       const text = this.loadingEl.querySelector('span');
       if (text) text.textContent = 'Processing...';
     }
@@ -229,7 +230,7 @@ export class InstructionModal extends Modal {
 
     try {
       await this.callbacks.onClarificationSubmit(response);
-    } catch (error) {
+    } catch {
       // On error, go back to clarification state
       this.isSubmitting = false;
       this.showState('clarification');
@@ -291,10 +292,10 @@ export type ClarificationSubmitCallback = (response: string) => Promise<void>;
 /** @deprecated Use InstructionModal instead */
 export class InstructionClarificationModal extends Modal {
   constructor(
-    app: import('obsidian').App,
-    clarification: string,
-    onSubmit: ClarificationSubmitCallback,
-    onCancel: () => void
+    app: App,
+    _clarification: string,
+    _onSubmit: ClarificationSubmitCallback,
+    _onCancel: () => void
   ) {
     super(app);
     // This class is deprecated - use InstructionModal instead

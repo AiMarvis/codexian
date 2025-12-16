@@ -5,12 +5,13 @@
  * Images are stored with SHA-256 hash filenames for deduplication.
  */
 
-import { App } from 'obsidian';
-import * as fs from 'fs';
-import * as path from 'path';
 import { createHash } from 'crypto';
-import { ImageMediaType } from './types';
-import { getVaultPath } from './utils';
+import * as fs from 'fs';
+import type { App } from 'obsidian';
+import * as path from 'path';
+
+import type { ImageMediaType } from '../types';
+import { getVaultPath } from '../utils';
 
 export const IMAGE_CACHE_DIR = '.claudian-cache/images';
 

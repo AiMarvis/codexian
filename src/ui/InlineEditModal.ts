@@ -6,26 +6,30 @@
  * - Diff replaces the selected text visually (like VS Code/Cursor)
  */
 
-import { App, Editor, MarkdownView, Notice } from 'obsidian';
-import { InlineEditService, type InlineEditMode, type CursorContext } from '../InlineEditService';
-import type ClaudianPlugin from '../main';
-import { getVaultPath, isCommandBlocked } from '../utils';
+import type { App, Editor} from 'obsidian';
+import { MarkdownView, Notice } from 'obsidian';
 
-import { normalizeInsertionText, escapeHtml } from './inlineEditUtils';
+import { type CursorContext,type InlineEditMode, InlineEditService } from '../InlineEditService';
+import type ClaudianPlugin from '../main';
+import { TOOL_BASH } from '../tools/toolNames';
+import { getVaultPath, isCommandBlocked } from '../utils';
 import { ApprovalModal } from './ApprovalModal';
-import { SlashCommandManager } from './SlashCommandManager';
+import { formatSlashCommandWarnings } from './formatSlashCommandWarnings';
+import { escapeHtml,normalizeInsertionText } from './inlineEditUtils';
 import { SlashCommandDropdown } from './SlashCommandDropdown';
+import { SlashCommandManager } from './SlashCommandManager';
 
 export type InlineEditContext =
   | { mode: 'selection'; selectedText: string }
   | { mode: 'cursor'; cursorContext: CursorContext };
+import { RangeSetBuilder,StateEffect, StateField } from '@codemirror/state';
+import type {
+  DecorationSet} from '@codemirror/view';
 import {
-  EditorView,
   Decoration,
-  DecorationSet,
+  EditorView,
   WidgetType,
 } from '@codemirror/view';
-import { StateField, StateEffect, RangeSetBuilder } from '@codemirror/state';
 
 // State effects
 const showInlineEdit = StateEffect.define<{
@@ -684,7 +688,7 @@ class InlineEditController {
     return new Promise((resolve) => {
       const modal = new ApprovalModal(
         this.app,
-        'Bash',
+        TOOL_BASH,
         { command },
         description,
         (decision) => resolve(decision === 'allow' || decision === 'allow-always'),
@@ -693,11 +697,4 @@ class InlineEditController {
       modal.open();
     });
   }
-}
-
-function formatSlashCommandWarnings(errors: string[]): string {
-  const maxItems = 3;
-  const head = errors.slice(0, maxItems);
-  const more = errors.length > maxItems ? `\n...and ${errors.length - maxItems} more` : '';
-  return `Slash command expansion warnings:\n- ${head.join('\n- ')}${more}`;
 }

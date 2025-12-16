@@ -4,7 +4,9 @@
  * Manages saving and restoring environment variable configurations.
  */
 
-import { App, Modal, Setting, Notice } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Notice,Setting } from 'obsidian';
+
 import type ClaudianPlugin from '../main';
 import type { EnvSnippet } from '../types';
 

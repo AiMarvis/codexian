@@ -1,8 +1,9 @@
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
-import { ensureImageCacheDir, saveImageToCache, readCachedImageBase64, deleteCachedImages, getCacheAbsolutePath } from '../src/imageCache';
-import { ImageMediaType } from '../src/types';
+import * as path from 'path';
+
+import { deleteCachedImages, ensureImageCacheDir, getCacheAbsolutePath,readCachedImageBase64, saveImageToCache } from '../src/images/imageCache';
+import type { ImageMediaType } from '../src/types';
 
 function createMockApp(vaultPath: string) {
   return {

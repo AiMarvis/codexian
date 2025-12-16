@@ -5,9 +5,11 @@
  * Supports $ARGUMENTS, $1/$2, @file references, and !`bash` execution.
  */
 
-import { App, TFile } from 'obsidian';
 import { exec } from 'child_process';
-import type { SlashCommand, ClaudeModel } from '../types';
+import type { App} from 'obsidian';
+import { TFile } from 'obsidian';
+
+import type { ClaudeModel,SlashCommand } from '../types';
 
 /** Parsed slash command frontmatter and prompt content. */
 export interface ParsedSlashCommandContent {

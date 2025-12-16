@@ -4,7 +4,9 @@
  * Settings UI for managing slash commands with create/edit/delete/import/export.
  */
 
-import { App, Modal, Setting, Notice } from 'obsidian';
+import type { App} from 'obsidian';
+import { Modal, Notice,Setting } from 'obsidian';
+
 import type ClaudianPlugin from '../main';
 import type { SlashCommand } from '../types';
 import { parseSlashCommandContent } from './SlashCommandManager';
@@ -38,7 +40,6 @@ export class SlashCommandModal extends Modal {
     let hintInput: HTMLInputElement;
     let modelInput: HTMLInputElement;
     let toolsInput: HTMLInputElement;
-    let contentArea: HTMLTextAreaElement;
 
     new Setting(contentEl)
       .setName('Command name')
@@ -86,7 +87,7 @@ export class SlashCommandModal extends Modal {
       .setName('Prompt template')
       .setDesc('Use $ARGUMENTS, $1, $2, @file, !`bash`');
 
-    contentArea = contentEl.createEl('textarea', {
+    const contentArea = contentEl.createEl('textarea', {
       cls: 'claudian-slash-content-area',
       attr: {
         rows: '10',
@@ -400,7 +401,7 @@ export class SlashCommandSettings {
         await this.plugin.saveSettings();
         this.render();
         new Notice(`Imported ${imported} slash command(s)`);
-      } catch (error) {
+      } catch {
         new Notice('Failed to import slash commands. Check file format.');
       }
     });

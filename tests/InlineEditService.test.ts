@@ -3,19 +3,23 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import * as os from 'os';
+import * as path from 'path';
+
+// eslint-disable-next-line jest/no-mocks-import
 import {
-  setMockMessages,
-  resetMockMessages,
   getLastOptions,
+  resetMockMessages,
+  setMockMessages,
 } from './__mocks__/claude-agent-sdk';
 
 // Mock fs module
 jest.mock('fs');
 
 // Now import after all mocks are set up
-import { InlineEditService, InlineEditRequest, buildCursorContext, CursorContext } from '../src/InlineEditService';
+import type { InlineEditRequest } from '../src/InlineEditService';
+import { buildCursorContext, InlineEditService } from '../src/InlineEditService';
+import { getPathFromToolInput } from '../src/tools/toolInput';
 
 // Create a mock plugin
 function createMockPlugin(settings = {}) {
@@ -102,8 +106,9 @@ describe('InlineEditService', () => {
   describe('vault restriction hook', () => {
     beforeEach(() => {
       const normalizePath = (p: string) => {
-        const path = require('path');
-        return path.resolve(p);
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const pathModule = require('path');
+        return pathModule.resolve(p);
       };
       (fs.realpathSync as any) = jest.fn(normalizePath);
       if (fs.realpathSync) {
@@ -639,6 +644,7 @@ describe('InlineEditService', () => {
     });
 
     it('should surface SDK query errors', async () => {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const sdk = require('@anthropic-ai/claude-agent-sdk');
       const spy = jest.spyOn(sdk, 'query').mockImplementation(() => {
         throw new Error('boom');
@@ -657,7 +663,7 @@ describe('InlineEditService', () => {
     });
 
     it('returns null path for unknown tool input', () => {
-      expect((service as any).getPathFromToolInput('Unknown', {})).toBeNull();
+      expect(getPathFromToolInput('Unknown', {})).toBeNull();
     });
 
     it('allows non-file tools in vault restriction hook', async () => {
@@ -667,7 +673,7 @@ describe('InlineEditService', () => {
     });
 
     it('extracts LS path from tool input', () => {
-      expect((service as any).getPathFromToolInput('LS', { path: 'notes' })).toBe('notes');
+      expect(getPathFromToolInput('LS', { path: 'notes' })).toBe('notes');
     });
   });
 

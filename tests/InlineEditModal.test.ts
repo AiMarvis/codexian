@@ -6,7 +6,7 @@
  * Consider extracting these to a shared module for direct testing.
  */
 
-import { normalizeInsertionText, escapeHtml } from '../src/ui/inlineEditUtils';
+import { escapeHtml,normalizeInsertionText } from '../src/ui/inlineEditUtils';
 
 // Copy of the diff algorithm from InlineEditModal for testing
 interface DiffOp {
@@ -242,6 +242,7 @@ describe('InlineEditModal - Word-level Diff', () => {
       for (let i = 1; i < types.length; i++) {
         if (types[i] === types[i - 1] && types[i] !== 'equal') {
           // Whitespace might separate merged ops
+          // eslint-disable-next-line jest/no-conditional-expect
           expect(result[i - 1].text.trim() || result[i].text.trim()).toBeTruthy();
         }
       }
@@ -394,7 +395,7 @@ describe('InlineEditModal - Word-level Diff', () => {
       const newText = '*italic* text';
 
       const ops = computeDiff(oldText, newText);
-      const html = diffToHtml(ops);
+      diffToHtml(ops); // Verify it doesn't throw
 
       expect(ops.some((op) => op.type === 'delete')).toBe(true);
       expect(ops.some((op) => op.type === 'insert')).toBe(true);

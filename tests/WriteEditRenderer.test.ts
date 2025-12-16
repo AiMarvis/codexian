@@ -2,20 +2,20 @@
  * Tests for WriteEditRenderer - Write/Edit tool UI with diff view
  */
 
+import type { ToolCallInfo, ToolDiffData } from '../src/types';
 import {
   createWriteEditBlock,
-  updateWriteEditWithDiff,
   finalizeWriteEditBlock,
   renderStoredWriteEdit,
+  updateWriteEditWithDiff,
 } from '../src/ui/WriteEditRenderer';
-import { ToolCallInfo, ToolDiffData } from '../src/types';
 
 // Create mock HTML element with Obsidian-like methods
 function createMockElement(tag = 'div'): any {
   const children: any[] = [];
   const classes = new Set<string>();
   const attributes = new Map<string, string>();
-  const eventListeners = new Map<string, Function[]>();
+  const eventListeners = new Map<string, ((...args: unknown[]) => void)[]>();
   const dataset: Record<string, string> = {};
 
   const element: any = {
@@ -56,7 +56,7 @@ function createMockElement(tag = 'div'): any {
     },
     setAttribute: (name: string, value: string) => attributes.set(name, value),
     getAttribute: (name: string) => attributes.get(name),
-    addEventListener: (event: string, handler: Function) => {
+    addEventListener: (event: string, handler: (...args: unknown[]) => void) => {
       if (!eventListeners.has(event)) eventListeners.set(event, []);
       eventListeners.get(event)!.push(handler);
     },

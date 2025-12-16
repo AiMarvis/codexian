@@ -12,16 +12,41 @@ Claudian - An Obsidian plugin that embeds Claude Code as a sidebar chat interfac
 src/
 ├── main.ts              # Plugin entry point, registers view and settings
 ├── ClaudianView.ts      # Sidebar chat UI (ItemView), orchestrates UI components
-├── ClaudianService.ts   # Claude Agent SDK wrapper, transforms SDK messages
+├── ClaudianService.ts   # Claude Agent SDK wrapper (includes SessionManager, DiffStore)
 ├── ClaudianSettings.ts  # Settings tab
 ├── systemPrompt.ts      # System prompt and image handling instructions
-├── types.ts             # Shared type definitions (StreamChunk, ToolCallInfo, etc.)
-├── utils.ts             # Utility functions (getVaultPath, env var parsing, model detection)
+├── types.ts             # Re-exports from types/ for backward compatibility
+├── utils.ts             # Utilities (vault, env, context files, session recovery, history reconstruction)
 ├── AsyncSubagentManager.ts # Async subagent state machine (Task → AgentOutputTool)
 ├── InlineEditService.ts # Lightweight Claude query service for inline text editing
 ├── InstructionRefineService.ts # Lightweight Claude query service for refining # instructions
-├── ui/DiffRenderer.ts   # Diff utilities (LCS, hunking, render helpers)
-├── ui/WriteEditRenderer.ts # Subagent-style Write/Edit diff blocks
+├── sdk/                 # SDK integration layer
+│   └── MessageTransformer.ts # SDK message transformation and event mapping
+├── hooks/               # SDK PreToolUse/PostToolUse hooks
+│   ├── index.ts              # Barrel export
+│   ├── SecurityHooks.ts      # Blocklist and vault restriction hooks
+│   └── DiffTrackingHooks.ts  # File content capture for diff view
+├── security/            # Security utilities (multiple consumers)
+│   ├── index.ts              # Barrel export
+│   ├── ApprovalManager.ts    # Tool approval management for Safe mode
+│   ├── BlocklistChecker.ts   # Command blocklist checking
+│   └── BashPathValidator.ts  # Bash command path validation
+├── tools/               # Tool utilities (multiple consumers)
+│   ├── index.ts              # Barrel export
+│   ├── toolNames.ts          # Tool name constants and helpers
+│   ├── toolIcons.ts          # Tool icon mapping
+│   └── toolInput.ts          # Tool input parsing utilities
+├── images/              # Image handling (multiple consumers)
+│   ├── index.ts              # Barrel export
+│   ├── imageCache.ts         # Image caching with SHA-256 deduplication
+│   └── imageLoader.ts        # Image loading and hydration utilities
+├── types/               # Type definitions (modular, used everywhere)
+│   ├── index.ts              # Barrel export
+│   ├── models.ts             # Model-related types
+│   ├── settings.ts           # Settings types
+│   ├── chat.ts               # Chat message types
+│   ├── tools.ts              # Tool-related types
+│   └── sdk.ts                # SDK-related types
 └── ui/                  # Modular UI components
     ├── index.ts              # Barrel export for all UI components
     ├── ApprovalModal.ts      # Permission approval dialog (Modal)
@@ -35,12 +60,27 @@ src/
     ├── ThinkingBlockRenderer.ts # Extended thinking block UI with timer
     ├── TodoListRenderer.ts   # Todo list UI for TodoWrite tool
     ├── SubagentRenderer.ts   # Subagent (Task tool) collapsible UI with nested tools
+    ├── DiffRenderer.ts       # Diff utilities (LCS, hunking, render helpers)
+    ├── WriteEditRenderer.ts  # Subagent-style Write/Edit diff blocks
     ├── EnvSnippetManager.ts  # Environment variable snippet management
     ├── InlineEditModal.ts    # Inline edit modal with diff preview
     ├── inlineEditUtils.ts    # Pure utility functions (normalizeInsertionText, escapeHtml)
+    ├── formatSlashCommandWarnings.ts # Slash command warning formatter
     ├── InstructionModeManager.ts # # instruction mode detection and UI state
     └── InstructionConfirmModal.ts # Unified instruction modal (loading/clarification/confirmation)
 ```
+
+### Module Organization Principles
+
+| Folder | Purpose | Consumers |
+|--------|---------|-----------|
+| `sdk/` | SDK message transformation boundary | ClaudianService |
+| `hooks/` | SDK PreToolUse/PostToolUse hook pattern | ClaudianService |
+| `security/` | Security utilities (approval, blocklist, path validation) | ClaudianService, hooks, utils |
+| `tools/` | Tool constants and utilities | ClaudianView, UI components |
+| `images/` | Image caching and loading | ClaudianService, ClaudianView, main |
+| `types/` | Type definitions | Everywhere |
+| `ui/` | All UI components | ClaudianView |
 
 ### UI Component Responsibilities
 
@@ -64,6 +104,7 @@ src/
 | `InlineEditModal` | Inline text editing with instruction input, @mentions, and inline diff preview |
 | `InstructionModeManager` | `#` instruction mode detection, light blue border indicator, keyboard handling |
 | `InstructionConfirmModal` | Unified modal for loading/clarification/confirmation and accepting refined instructions |
+| `formatSlashCommandWarnings` | Slash command warning formatter (used by chat and inline edit) |
 
 ## Key Technologies
 
@@ -895,3 +936,4 @@ Permanently approved actions are stored and can be managed in Settings → Appro
 - Test Driven Development
 - when ask to generate a md file about the finding, implementation of your work, put the file in dev/
 - when ask to update docs, update development note in dev/ , CLAUDE.md and README.md
+- run `npm run lint`, `npm run build` and `npm run test` to check if the code is valid

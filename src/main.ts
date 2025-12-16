@@ -5,22 +5,25 @@
  * Manages conversation persistence and environment variable configuration.
  */
 
-import { Plugin, Notice, MarkdownView, Editor } from 'obsidian';
-import { ClaudianView } from './ClaudianView';
+import type { Editor,MarkdownView } from 'obsidian';
+import { Notice,Plugin } from 'obsidian';
+
 import { ClaudianService } from './ClaudianService';
 import { ClaudianSettingTab } from './ClaudianSettings';
-import {
+import { ClaudianView } from './ClaudianView';
+import { deleteCachedImages } from './images/imageCache';
+import { buildCursorContext } from './InlineEditService';
+import type {
   ClaudianSettings,
+  Conversation,
+  ConversationMeta} from './types';
+import {
+  DEFAULT_CLAUDE_MODELS,
   DEFAULT_SETTINGS,
   VIEW_TYPE_CLAUDIAN,
-  Conversation,
-  ConversationMeta,
-  DEFAULT_CLAUDE_MODELS,
 } from './types';
+import { type InlineEditContext,InlineEditModal } from './ui/InlineEditModal';
 import { getCurrentModelFromEnvironment, getModelsFromEnvironment, parseEnvironmentVariables } from './utils';
-import { deleteCachedImages } from './imageCache';
-import { InlineEditModal, type InlineEditContext } from './ui/InlineEditModal';
-import { buildCursorContext } from './InlineEditService';
 
 /**
  * Main plugin class for Claudian.

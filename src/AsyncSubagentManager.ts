@@ -5,10 +5,10 @@
  * Task tool_use → agent_id → AgentOutputTool → completed/error/orphaned.
  */
 
-import {
+import type {
+  AsyncSubagentStatus,
   SubagentInfo,
   SubagentMode,
-  AsyncSubagentStatus,
   ToolCallInfo,
 } from './types';
 
@@ -224,7 +224,7 @@ export class AsyncSubagentManager {
       }
 
       return false;
-    } catch (e) {
+    } catch {
       // Not JSON
     }
 
