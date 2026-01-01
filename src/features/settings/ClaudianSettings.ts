@@ -4,8 +4,8 @@
  * Plugin settings UI for hotkeys, customization, safety, and environment variables.
  */
 
-import type { App} from 'obsidian';
-import { PluginSettingTab, Setting } from 'obsidian';
+import type { App } from 'obsidian';
+import { Notice, PluginSettingTab, Setting } from 'obsidian';
 
 import { getCurrentPlatformKey } from '../../core/types';
 import { DEFAULT_CLAUDE_MODELS } from '../../core/types/models';
@@ -69,6 +69,101 @@ export class ClaudianSettingTab extends PluginSettingTab {
             }, 100);
           })
       );
+
+    // Keyboard Navigation section
+    new Setting(containerEl).setName('Keyboard Navigation').setHeading();
+
+    const navDesc = containerEl.createDiv({ cls: 'setting-item-description' });
+    navDesc.setText('Vim-style navigation: press Escape to focus chat panel, then use keys to scroll or focus input.');
+
+    // Helper to validate navigation key (checks against all other keys)
+    const validateNavKey = (
+      value: string,
+      otherKeys: string[],
+      defaultKey: string
+    ): { key: string | null; error?: string } => {
+      const key = value.trim();
+      if (!key) return { key: defaultKey };
+      if (key.length !== 1) return { key: null, error: 'Key must be a single character' };
+      for (const other of otherKeys) {
+        if (key.toLowerCase() === other.toLowerCase()) {
+          return { key: null, error: 'Navigation keys must be unique' };
+        }
+      }
+      return { key };
+    };
+
+    new Setting(containerEl)
+      .setName('Scroll up key')
+      .setDesc('Single character key to scroll up (default: w)')
+      .addText((text) => {
+        text
+          .setPlaceholder('w')
+          .setValue(this.plugin.settings.keyboardNavigation.scrollUpKey)
+          .onChange(async (value) => {
+            const otherKeys = [
+              this.plugin.settings.keyboardNavigation.scrollDownKey,
+              this.plugin.settings.keyboardNavigation.focusInputKey,
+            ];
+            const result = validateNavKey(value, otherKeys, 'w');
+            if (result.key === null) {
+              new Notice(`Invalid key: ${result.error}`);
+              text.setValue(this.plugin.settings.keyboardNavigation.scrollUpKey);
+              return;
+            }
+            this.plugin.settings.keyboardNavigation.scrollUpKey = result.key;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.maxLength = 1;
+      });
+
+    new Setting(containerEl)
+      .setName('Scroll down key')
+      .setDesc('Single character key to scroll down (default: s)')
+      .addText((text) => {
+        text
+          .setPlaceholder('s')
+          .setValue(this.plugin.settings.keyboardNavigation.scrollDownKey)
+          .onChange(async (value) => {
+            const otherKeys = [
+              this.plugin.settings.keyboardNavigation.scrollUpKey,
+              this.plugin.settings.keyboardNavigation.focusInputKey,
+            ];
+            const result = validateNavKey(value, otherKeys, 's');
+            if (result.key === null) {
+              new Notice(`Invalid key: ${result.error}`);
+              text.setValue(this.plugin.settings.keyboardNavigation.scrollDownKey);
+              return;
+            }
+            this.plugin.settings.keyboardNavigation.scrollDownKey = result.key;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.maxLength = 1;
+      });
+
+    new Setting(containerEl)
+      .setName('Focus input key')
+      .setDesc('Single character key to focus the input area (default: i)')
+      .addText((text) => {
+        text
+          .setPlaceholder('i')
+          .setValue(this.plugin.settings.keyboardNavigation.focusInputKey)
+          .onChange(async (value) => {
+            const otherKeys = [
+              this.plugin.settings.keyboardNavigation.scrollUpKey,
+              this.plugin.settings.keyboardNavigation.scrollDownKey,
+            ];
+            const result = validateNavKey(value, otherKeys, 'i');
+            if (result.key === null) {
+              new Notice(`Invalid key: ${result.error}`);
+              text.setValue(this.plugin.settings.keyboardNavigation.focusInputKey);
+              return;
+            }
+            this.plugin.settings.keyboardNavigation.focusInputKey = result.key;
+            await this.plugin.saveSettings();
+          });
+        text.inputEl.maxLength = 1;
+      });
 
     // Customization section
     new Setting(containerEl).setName('Customization').setHeading();
