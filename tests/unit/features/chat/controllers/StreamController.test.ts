@@ -5,16 +5,52 @@
  * Tool result tracking and UI rendering are tested through integration tests.
  */
 
-import { TOOL_ASK_USER_QUESTION } from '@/core/tools/toolNames';
+import { TOOL_ASK_USER_QUESTION, TOOL_TASK, TOOL_TODO_WRITE } from '@/core/tools/toolNames';
 import type { ChatMessage } from '@/core/types';
 import { StreamController, type StreamControllerDeps } from '@/features/chat/controllers/StreamController';
 import { ChatState } from '@/features/chat/state/ChatState';
+
+// Mock UI module
+jest.mock('@/ui', () => {
+  const mockWrapperEl = {
+    addClass: jest.fn(),
+    removeClass: jest.fn(),
+  };
+  return {
+    createSubagentBlock: jest.fn().mockReturnValue({
+      info: { id: 'task-1', description: 'test', status: 'running', toolCalls: [] },
+    }),
+    createAskUserQuestionBlock: jest.fn().mockReturnValue({
+      wrapperEl: mockWrapperEl,
+      headerEl: {},
+      answerEl: {},
+      questions: [],
+    }),
+    parseAskUserQuestionInput: jest.fn().mockReturnValue({
+      questions: [],
+    }),
+    finalizeAskUserQuestionBlock: jest.fn(),
+    createThinkingBlock: jest.fn().mockReturnValue({
+      container: {},
+      contentEl: {},
+      content: '',
+      startTime: Date.now(),
+    }),
+    appendThinkingContent: jest.fn(),
+    finalizeThinkingBlock: jest.fn().mockReturnValue(0),
+    renderToolCall: jest.fn(),
+    updateToolCallResult: jest.fn(),
+    isBlockedToolResult: jest.fn().mockReturnValue(false),
+    parseTodoInput: jest.fn(),
+  };
+});
 
 // Helper to create mock DOM element with full properties needed for rendering
 function createMockElement() {
   const children: any[] = [];
   const classList = new Set<string>();
   const dataset: Record<string, string> = {};
+  const attributes: Record<string, string> = {};
 
   const element: any = {
     children,
@@ -59,6 +95,10 @@ function createMockElement() {
     remove: jest.fn(),
     setText: jest.fn((text: string) => { element.textContent = text; }),
     setAttr: jest.fn(),
+    setAttribute: (name: string, value: string) => { attributes[name] = value; },
+    getAttribute: (name: string) => attributes[name],
+    addEventListener: jest.fn(),
+    removeEventListener: jest.fn(),
     textContent: '',
     tagName: 'DIV',
   };
@@ -85,8 +125,7 @@ function createMockDeps(): StreamControllerDeps {
   return {
     plugin: {
       settings: {
-        showToolUse: false,
-        toolCallExpandedByDefault: false,
+        permissionMode: 'yolo',
       },
       app: {
         vault: {
@@ -242,7 +281,7 @@ describe('StreamController - Text Content', () => {
   });
 
   describe('Tool handling', () => {
-    it('should record tool_use when tool rendering is disabled', async () => {
+    it('should record tool_use and add to content blocks', async () => {
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockElement();
 
@@ -254,7 +293,8 @@ describe('StreamController - Text Content', () => {
       expect(msg.toolCalls).toHaveLength(1);
       expect(msg.toolCalls![0].id).toBe('tool-1');
       expect(msg.toolCalls![0].status).toBe('running');
-      expect(msg.contentBlocks).toHaveLength(0);
+      expect(msg.contentBlocks).toHaveLength(1);
+      expect(msg.contentBlocks![0]).toEqual({ type: 'tool_use', toolId: 'tool-1' });
       expect(deps.updateQueueIndicator).toHaveBeenCalled();
     });
 
@@ -286,7 +326,7 @@ describe('StreamController - Text Content', () => {
       );
     });
 
-    it('should persist AskUserQuestion answers when tool rendering is disabled', async () => {
+    it('should persist AskUserQuestion answers and render block', async () => {
       const msg = createTestMessage();
       deps.state.currentContentEl = createMockElement();
 
@@ -325,6 +365,52 @@ describe('StreamController - Text Content', () => {
       expect(msg.toolCalls![0].input).toMatchObject({
         answers: { 'Which option?': 'A' },
       });
+    });
+
+    it('should add subagent entry to contentBlocks for Task tool', async () => {
+      const msg = createTestMessage();
+      deps.state.currentContentEl = createMockElement();
+
+      await controller.handleStreamChunk(
+        {
+          type: 'tool_use',
+          id: 'task-1',
+          name: TOOL_TASK,
+          input: { prompt: 'Do something', subagent_type: 'general-purpose' },
+        },
+        msg
+      );
+
+      expect(msg.contentBlocks).toHaveLength(1);
+      expect(msg.contentBlocks![0]).toEqual({ type: 'subagent', subagentId: 'task-1' });
+      expect(msg.subagents).toHaveLength(1);
+      expect(msg.subagents![0].id).toBe('task-1');
+    });
+
+    it('should render as raw tool call when TodoWrite parsing fails', async () => {
+      const { parseTodoInput, renderToolCall } = jest.requireMock('@/ui');
+      parseTodoInput.mockReturnValue(null); // Simulate parse failure
+
+      const msg = createTestMessage();
+      deps.state.currentContentEl = createMockElement();
+
+      await controller.handleStreamChunk(
+        {
+          type: 'tool_use',
+          id: 'todo-1',
+          name: TOOL_TODO_WRITE,
+          input: { invalid: 'data' },
+        },
+        msg
+      );
+
+      // Should fall back to rendering as tool call
+      expect(msg.contentBlocks).toHaveLength(1);
+      expect(msg.contentBlocks![0]).toEqual({ type: 'tool_use', toolId: 'todo-1' });
+      expect(renderToolCall).toHaveBeenCalled();
+
+      // Should not update currentTodos
+      expect(deps.state.currentTodos).toBeNull();
     });
   });
 });
