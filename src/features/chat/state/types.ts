@@ -123,6 +123,8 @@ export interface QueryOptions {
   enabledMcpServers?: Set<string>;
   /** Enable plan mode (read-only exploration). */
   planMode?: boolean;
+  /** Session-specific context paths (read-only external directories). */
+  sessionContextPaths?: string[];
 }
 
 // Re-export types that are used across the chat feature

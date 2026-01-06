@@ -108,10 +108,12 @@ function createMockDeps(overrides: Partial<InputControllerDeps> = {}): InputCont
       getCurrentNotePath: jest.fn().mockReturnValue(null),
       shouldSendCurrentNote: jest.fn().mockReturnValue(false),
       markCurrentNoteSent: jest.fn(),
+      transformContextMentions: jest.fn().mockImplementation((text: string) => text),
     }) as any,
     getImageContextManager: () => imageContextManager as any,
     getSlashCommandManager: () => null,
     getMcpServerSelector: () => null,
+    getContextPathSelector: () => null,
     getInstructionModeManager: () => null,
     getInstructionRefineService: () => null,
     getTitleGenerationService: () => null,
@@ -346,6 +348,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = deps.getImageContextManager()!;
 
@@ -379,6 +382,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue('notes/session.md'),
         shouldSendCurrentNote: jest.fn().mockImplementation(() => !currentNoteSent),
         markCurrentNoteSent: jest.fn().mockImplementation(() => { currentNoteSent = true; }),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
 
       deps.getFileContextManager = () => fileContextManager as any;
@@ -529,6 +533,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 
@@ -573,6 +578,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 
@@ -611,6 +617,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 
@@ -660,6 +667,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 
@@ -711,6 +719,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 
@@ -760,6 +769,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 
@@ -807,6 +817,7 @@ describe('InputController - Message Queue', () => {
         getCurrentNotePath: jest.fn().mockReturnValue(null),
         shouldSendCurrentNote: jest.fn().mockReturnValue(false),
         markCurrentNoteSent: jest.fn(),
+        transformContextMentions: jest.fn().mockImplementation((text: string) => text),
       };
       const imageContextManager = createMockImageContextManager();
 

@@ -57,6 +57,7 @@ export interface InputControllerDeps {
   getImageContextManager: () => ImageContextManager | null;
   getSlashCommandManager: () => SlashCommandManager | null;
   getMcpServerSelector: () => McpServerSelector | null;
+  getContextPathSelector: () => { getContextPaths: () => string[] } | null;
   getInstructionModeManager: () => InstructionModeManager | null;
   getInstructionRefineService: () => InstructionRefineService | null;
   getTitleGenerationService: () => TitleGenerationService | null;
@@ -243,6 +244,11 @@ export class InputController {
       promptToSend = `${options.promptPrefix}\n\n${promptToSend}`;
     }
 
+    // Transform context file mentions (e.g., @folder/file.ts) to absolute paths
+    if (fileContextManager) {
+      promptToSend = fileContextManager.transformContextMentions(promptToSend);
+    }
+
     fileContextManager?.markCurrentNoteSent();
 
     const userMsg: ChatMessage = {
@@ -292,6 +298,16 @@ export class InputController {
         ...queryOptions,
         mcpMentions,
         enabledMcpServers,
+      };
+    }
+
+    // Add session context paths to query
+    const contextPathSelector = this.deps.getContextPathSelector();
+    const sessionContextPaths = contextPathSelector?.getContextPaths();
+    if (sessionContextPaths && sessionContextPaths.length > 0) {
+      queryOptions = {
+        ...queryOptions,
+        sessionContextPaths,
       };
     }
 

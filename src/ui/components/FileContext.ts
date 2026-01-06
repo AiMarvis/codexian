@@ -84,6 +84,8 @@ export class FileContextManager {
       this.inputEl,
       {
         onAttachFile: (filePath) => this.state.attachFile(filePath),
+        onAttachContextFile: (displayName, absolutePath) =>
+          this.state.attachContextFile(displayName, absolutePath),
         onMcpMentionChange: (servers) => this.onMcpMentionChange?.(servers),
         getMentionedMcpServers: () => this.state.getMentionedMcpServers(),
         setMentionedMcpServers: (mentions) => this.state.setMentionedMcpServers(mentions),
@@ -204,6 +206,11 @@ export class FileContextManager {
 
   containsElement(el: Node): boolean {
     return this.mentionDropdown.containsElement(el);
+  }
+
+  /** Transform context file mentions (e.g., @folder/file.ts) to absolute paths. */
+  transformContextMentions(text: string): string {
+    return this.state.transformContextMentions(text);
   }
 
   /** Cleans up event listeners (call on view close). */

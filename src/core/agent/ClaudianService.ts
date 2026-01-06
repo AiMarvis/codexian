@@ -185,6 +185,8 @@ export interface QueryOptions {
   enabledMcpServers?: Set<string>;
   /** Enable plan mode (read-only exploration). */
   planMode?: boolean;
+  /** Session-specific context paths (read-only external directories). */
+  sessionContextPaths?: string[];
 }
 
 /** Decision returned after plan approval. */
@@ -412,7 +414,7 @@ export class ClaudianService {
       mediaFolder: this.plugin.settings.mediaFolder,
       customPrompt: this.plugin.settings.systemPrompt,
       allowedExportPaths: this.plugin.settings.allowedExportPaths,
-      allowedContextPaths: this.plugin.settings.allowedContextPaths,
+      allowedContextPaths: queryOptions?.sessionContextPaths,
       vaultPath: cwd,
       hasEditorContext,
       planMode: queryOptions?.planMode,

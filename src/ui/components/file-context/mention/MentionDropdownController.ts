@@ -19,6 +19,8 @@ export interface MentionDropdownOptions {
 
 export interface MentionDropdownCallbacks {
   onAttachFile: (path: string) => void;
+  /** Attach context file with display name to absolute path mapping. */
+  onAttachContextFile?: (displayName: string, absolutePath: string) => void;
   onMcpMentionChange?: (servers: Set<string>) => void;
   getMentionedMcpServers: () => Set<string>;
   setMentionedMcpServers: (mentions: Set<string>) => boolean;
@@ -439,13 +441,20 @@ export class MentionDropdownController {
       this.handleInputChange();
       return;
     } else if (selectedItem.type === 'context-file') {
-      if (selectedItem.absolutePath) {
-        this.callbacks.onAttachFile(selectedItem.absolutePath);
-      }
-
+      // Display friendly name, but store mapping for later transformation to absolute path
       const displayName = selectedItem.folderName
         ? `@${selectedItem.folderName}/${selectedItem.name}`
         : `@${selectedItem.name}`;
+
+      if (selectedItem.absolutePath) {
+        // Use context file callback if available, fallback to regular attach
+        if (this.callbacks.onAttachContextFile) {
+          this.callbacks.onAttachContextFile(displayName, selectedItem.absolutePath);
+        } else {
+          this.callbacks.onAttachFile(selectedItem.absolutePath);
+        }
+      }
+
       const replacement = `${displayName} `;
       this.inputEl.value = beforeAt + replacement + afterCursor;
       this.inputEl.selectionStart = this.inputEl.selectionEnd = beforeAt.length + replacement.length;

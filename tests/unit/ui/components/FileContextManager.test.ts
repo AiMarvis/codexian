@@ -396,9 +396,13 @@ describe('FileContextManager', () => {
 
     manager.handleMentionKeydown({ key: 'Enter', preventDefault: jest.fn() } as any);
 
+    // Display shows friendly name, but state stores mapping to absolute path
     expect(inputEl.value).toBe('@external/src/app.md ');
     const attached = (manager as any).state.getAttachedFiles();
     expect(attached.has('/external/src/app.md')).toBe(true);
+    // Check transformation works
+    const transformed = (manager as any).state.transformContextMentions('@external/src/app.md');
+    expect(transformed).toBe('/external/src/app.md');
 
     manager.destroy();
   });

@@ -464,6 +464,7 @@ export class ClaudianView extends ItemView {
       getImageContextManager: () => this.imageContextManager,
       getSlashCommandManager: () => this.slashCommandManager,
       getMcpServerSelector: () => this.mcpServerSelector,
+      getContextPathSelector: () => this.contextPathSelector,
       getInstructionModeManager: () => this.instructionModeManager,
       getInstructionRefineService: () => this.instructionRefineService,
       getTitleGenerationService: () => this.titleGenerationService,
