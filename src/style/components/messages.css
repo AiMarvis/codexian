@@ -43,7 +43,6 @@
 
 .claudian-message-user {
   background: rgba(0, 0, 0, 0.3);
-  color: var(--text-on-accent);
   align-self: flex-end;
   border-bottom-right-radius: 4px;
 }
@@ -66,8 +65,6 @@
   max-width: 100%;
   border-bottom-left-radius: 4px;
   text-align: left;
-  padding-left: 0;
-  padding-right: 0;
 }
 
 /* Message content */
