@@ -26,8 +26,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Validate
+        run: npm run typecheck && npm run lint && npm run test && npm run build
 
       - name: Get previous tag
         id: prev_tag

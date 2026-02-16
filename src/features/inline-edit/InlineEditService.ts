@@ -1,5 +1,5 @@
-import type { HookCallbackMatcher, Options } from '@anthropic-ai/claude-agent-sdk';
-import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
+import type { HookCallbackMatcher, Options } from '@/core/sdk/codexAgentSdkCompat';
+import { query as agentQuery } from '@/core/sdk/codexAgentSdkCompat';
 
 import { getInlineEditSystemPrompt } from '../../core/prompts/inlineEdit';
 import { getPathFromToolInput } from '../../core/tools/toolInput';
@@ -175,7 +175,7 @@ export function createVaultRestrictionHook(vaultPath: string): HookCallbackMatch
           };
         }
 
-        // Allows vault and ~/.claude/ paths (context/readwrite params are undefined)
+        // Allows vault and ~/.codex/ paths (context/readwrite params are undefined)
         let accessType: PathAccessType;
         try {
           accessType = getPathAccessType(filePath, undefined, undefined, vaultPath);
@@ -200,7 +200,7 @@ export function createVaultRestrictionHook(vaultPath: string): HookCallbackMatch
           hookSpecificOutput: {
             hookEventName: 'PreToolUse' as const,
             permissionDecision: 'deny' as const,
-            permissionDecisionReason: `Access denied: Path "${filePath}" is outside allowed paths. Inline edit is restricted to vault and ~/.claude/ directories.`,
+            permissionDecisionReason: `Access denied: Path "${filePath}" is outside allowed paths. Inline edit is restricted to vault and ~/.codex/ directories.`,
           },
         };
       },
@@ -269,7 +269,7 @@ export class InlineEditService {
 
     const resolvedClaudePath = this.plugin.getResolvedClaudeCliPath();
     if (!resolvedClaudePath) {
-      return { success: false, error: 'Claude CLI not found. Please install Claude Code CLI.' };
+      return { success: false, error: 'Codex CLI not found. Please install @openai/codex.' };
     }
 
     this.abortController = new AbortController();
@@ -295,7 +295,7 @@ export class InlineEditService {
       tools: [...READ_ONLY_TOOLS],
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
-      settingSources: this.plugin.settings.loadUserClaudeSettings
+      settingSources: (this.plugin.settings.loadUserCodexSettings ?? this.plugin.settings.loadUserClaudeSettings)
         ? ['user', 'project']
         : ['project'],
       hooks: {

@@ -95,7 +95,16 @@ describe('sdkSession', () => {
   });
 
   describe('getSDKProjectsPath', () => {
-    it('returns path under home directory', () => {
+    it('prefers codex projects path when available', () => {
+      mockExistsSync.mockImplementation(target => target === '/Users/test/.codex/projects');
+
+      const projectsPath = getSDKProjectsPath();
+      expect(projectsPath).toBe('/Users/test/.codex/projects');
+    });
+
+    it('falls back to claude projects path when codex path is missing', () => {
+      mockExistsSync.mockReturnValue(false);
+
       const projectsPath = getSDKProjectsPath();
       expect(projectsPath).toBe('/Users/test/.claude/projects');
     });
@@ -183,7 +192,7 @@ describe('sdkSession', () => {
       await deleteSDKSession('/Users/test/vault', 'session-abc');
 
       expect(mockFsPromises.unlink).toHaveBeenCalledWith(
-        '/Users/test/.claude/projects/-Users-test-vault/session-abc.jsonl'
+        '/Users/test/.codex/projects/-Users-test-vault/session-abc.jsonl'
       );
     });
 
@@ -290,7 +299,7 @@ describe('sdkSession', () => {
       );
 
       expect(mockFsPromises.readFile).toHaveBeenCalledWith(
-        '/Users/test/.claude/projects/-Users-test-vault/session-abc/subagents/agent-a123.jsonl',
+        '/Users/test/.codex/projects/-Users-test-vault/session-abc/subagents/agent-a123.jsonl',
         'utf-8'
       );
       expect(toolCalls).toHaveLength(1);
@@ -348,7 +357,7 @@ describe('sdkSession', () => {
 
       expect(result).toBe('Final answer');
       expect(mockFsPromises.readFile).toHaveBeenCalledWith(
-        '/Users/test/.claude/projects/-Users-test-vault/session-abc/subagents/agent-a123.jsonl',
+        '/Users/test/.codex/projects/-Users-test-vault/session-abc/subagents/agent-a123.jsonl',
         'utf-8'
       );
     });

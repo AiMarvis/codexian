@@ -65,10 +65,10 @@
     }
   },
   "settings": {
-    "title": "Claudian 設定",
+    "title": "Codexian 設定",
     "customization": "個人化設定",
     "userName": {
-      "name": "Claudian 應該如何稱呼您？",
+      "name": "Codexian 應該如何稱呼您？",
       "desc": "用於個人化問候的使用者名稱（留空使用通用問候）"
     },
     "excludedTags": {
@@ -77,7 +77,7 @@
     },
     "mediaFolder": {
       "name": "媒體資料夾",
-      "desc": "存放附件/圖片的資料夾。當筆記使用 ![[image.jpg]] 時，Claude 會在此查找。留空使用儲存庫根目錄。"
+      "desc": "存放附件/圖片的資料夾。當筆記使用 ![[image.jpg]] 時，Codex 會在此查找。留空使用儲存庫根目錄。"
     },
     "systemPrompt": {
       "name": "自訂系統提示詞",
@@ -138,20 +138,20 @@
     },
     "hiddenSlashCommands": {
       "name": "隱藏命令",
-      "desc": "從下拉選單中隱藏特定的斜線命令。適用於隱藏與 Claudian 無關的 Claude Code 命令。每行輸入一個命令名稱，無需前導斜線。",
+      "desc": "從下拉選單中隱藏特定的斜線命令。適用於隱藏與 Codexian 無關的 Codex 命令。每行輸入一個命令名稱，無需前導斜線。",
       "placeholder": "commit\nbuild\ntest"
     },
     "mcpServers": {
       "name": "MCP 伺服器",
-      "desc": "設定模型上下文協定伺服器，透過外部工具和資料來源擴展 Claude 的能力。啟用上下文保存模式的伺服器需要 @ 提及才能啟用。"
+      "desc": "設定模型上下文協定伺服器，透過外部工具和資料來源擴展 Codex 的能力。啟用上下文保存模式的伺服器需要 @ 提及才能啟用。"
     },
     "plugins": {
-      "name": "Claude Code 外掛程式",
-      "desc": "啟用或停用從 ~/.claude/plugins 發現的 Claude Code 外掛程式。已啟用的外掛程式按儲存庫儲存。"
+      "name": "Codex 外掛程式",
+      "desc": "啟用或停用從 ~/.codex/plugins 發現的 Codex 外掛程式。已啟用的外掛程式按儲存庫儲存。"
     },
     "subagents": {
       "name": "Subagents",
-      "desc": "Configure custom subagents that Claude can delegate to.",
+      "desc": "Configure custom subagents that Codex can delegate to.",
       "noAgents": "No subagents configured. Click + to create one.",
       "deleteConfirm": "Delete subagent \"{name}\"?",
       "saveFailed": "Failed to save subagent: {message}",
@@ -188,8 +188,8 @@
     },
     "safety": "安全",
     "loadUserSettings": {
-      "name": "載入使用者 Claude 設定",
-      "desc": "載入 ~/.claude/settings.json。啟用後，使用者的 Claude Code 權限規則可能繞過安全模式。"
+      "name": "載入使用者 Codex 設定",
+      "desc": "載入 ~/.codex/settings.json。啟用後，使用者的 Codex 權限規則可能繞過安全模式。"
     },
     "enableBlocklist": {
       "name": "啟用命令黑名單",
@@ -208,7 +208,7 @@
     "environment": "環境",
     "customVariables": {
       "name": "自訂變數",
-      "desc": "Claude SDK 的環境變數（KEY=VALUE 格式，每行一個）。支援 export 前綴。"
+      "desc": "Codex CLI 的環境變數（KEY=VALUE 格式，每行一個）。支援 export 前綴。"
     },
     "envSnippets": {
       "name": "片段",
@@ -241,7 +241,7 @@
     },
     "enableChrome": {
       "name": "啟用 Chrome 擴充功能",
-      "desc": "允許 Claude 透過 claude-in-chrome 擴充功能與 Chrome 互動。需要安裝該擴充功能。需要重新啟動工作階段。"
+      "desc": "允許 Codex 透過 codex-in-chrome 擴充功能與 Chrome 互動。需要安裝該擴充功能。需要重新啟動工作階段。"
     },
     "enableBangBash": {
       "name": "Enable bash mode (!)",
@@ -252,7 +252,7 @@
     },
     "maxTabs": {
       "name": "最大聊天標籤數",
-      "desc": "同時開啟的最大聊天標籤數（3-10）。每個標籤使用獨立的 Claude 對話。",
+      "desc": "同時開啟的最大聊天標籤數（3-10）。每個標籤使用獨立的 Codex 對話。",
       "warning": "超過 5 個標籤可能會影響效能和記憶體使用。"
     },
     "tabBarPosition": {
@@ -263,17 +263,17 @@
     },
     "enableAutoScroll": {
       "name": "串流傳輸時自動捲動",
-      "desc": "在 Claude 串流傳輸回應時自動捲動到底部。停用後將停留在頂部，從頭開始閱讀。"
+      "desc": "在 Codex 串流傳輸回應時自動捲動到底部。停用後將停留在頂部，從頭開始閱讀。"
     },
     "openInMainTab": {
       "name": "在主編輯器區域開啟",
       "desc": "在中央編輯器區域以主分頁形式開啟聊天面板，而不是在右側邊欄"
     },
     "cliPath": {
-      "name": "Claude CLI 路徑",
-      "desc": "Claude Code CLI 的自訂路徑。留空使用自動檢測。",
-      "descWindows": "對於原生安裝程式，使用 claude.exe。對於 npm/pnpm/yarn 或其他套件管理器安裝，使用 cli.js 路徑（不是 claude.cmd）。",
-      "descUnix": "貼上 \"which claude\" 的輸出 - 適用於原生安裝和 npm/pnpm/yarn 安裝。",
+      "name": "Codex CLI 路徑",
+      "desc": "Codex CLI 的自訂路徑。留空使用自動檢測。",
+      "descWindows": "對於原生安裝程式，使用 codex.exe。對於 npm/pnpm/yarn 或其他套件管理器安裝，使用 cli.js 路徑（不是 codex.cmd）。",
+      "descUnix": "貼上 \"which codex\" 的輸出 - 適用於原生安裝和 npm/pnpm/yarn 安裝。",
       "validation": {
         "notExist": "路徑不存在",
         "isDirectory": "路徑是目錄，不是檔案"

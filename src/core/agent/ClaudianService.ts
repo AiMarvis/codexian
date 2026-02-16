@@ -11,6 +11,12 @@
  * - Dynamic updates (model, thinking tokens, permission mode, MCP servers)
  */
 
+import { randomUUID } from 'crypto';
+import * as fs from 'fs';
+import { Notice } from 'obsidian';
+import * as os from 'os';
+import * as path from 'path';
+
 import type {
   CanUseTool,
   McpServerConfig,
@@ -22,13 +28,8 @@ import type {
   SDKMessage,
   SDKUserMessage,
   SlashCommand as SDKSlashCommand,
-} from '@anthropic-ai/claude-agent-sdk';
-import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
-import { randomUUID } from 'crypto';
-import * as fs from 'fs';
-import { Notice } from 'obsidian';
-import * as os from 'os';
-import * as path from 'path';
+} from '@/core/sdk/codexAgentSdkCompat';
+import { query as agentQuery } from '@/core/sdk/codexAgentSdkCompat';
 
 import type ClaudianPlugin from '../../main';
 import { stripCurrentNoteContext } from '../../utils/context';
@@ -735,7 +736,7 @@ export class ClaudianService {
 
     const resolvedClaudePath = this.plugin.getResolvedClaudeCliPath();
     if (!resolvedClaudePath) {
-      yield { type: 'error', content: 'Claude CLI not found. Please install Claude Code CLI.' };
+      yield { type: 'error', content: 'Codex CLI not found. Please install @openai/codex.' };
       return;
     }
 

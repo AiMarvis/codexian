@@ -4,8 +4,9 @@
  * PreToolUse hooks for enforcing blocklist and vault restriction.
  */
 
-import type { HookCallbackMatcher } from '@anthropic-ai/claude-agent-sdk';
 import { Notice } from 'obsidian';
+
+import type { HookCallbackMatcher } from '@/core/sdk/codexAgentSdkCompat';
 
 import type { PathAccessType } from '../../utils/path';
 import type { PathCheckContext } from '../security/BashPathValidator';

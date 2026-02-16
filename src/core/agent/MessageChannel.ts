@@ -5,7 +5,7 @@
  * Handles message queuing, turn management, and text merging.
  */
 
-import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKUserMessage } from '@/core/sdk/codexAgentSdkCompat';
 
 import {
   MESSAGE_CHANNEL_CONFIG,

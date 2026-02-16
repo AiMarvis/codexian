@@ -33,7 +33,7 @@ function createMockCallbacks(overrides: Record<string, any> = {}) {
     onThinkingBudgetChange: jest.fn().mockResolvedValue(undefined),
     onPermissionModeChange: jest.fn().mockResolvedValue(undefined),
     getSettings: jest.fn().mockReturnValue({
-      model: 'sonnet',
+      model: 'gpt-5-codex',
       thinkingBudget: 'low',
       permissionMode: 'normal',
     }),
@@ -60,12 +60,12 @@ describe('ModelSelector', () => {
   });
 
   it('should display current model label', () => {
-    // Default model is 'sonnet' which maps to 'Sonnet'
+    // Default model is 'gpt-5-codex' which maps to 'GPT-5 Codex'
     const btn = parentEl.querySelector('.claudian-model-btn');
     expect(btn).not.toBeNull();
     const label = btn?.querySelector('.claudian-model-label');
     expect(label).not.toBeNull();
-    expect(label?.textContent).toBe('Sonnet');
+    expect(label?.textContent).toBe('GPT-5 Codex');
   });
 
   it('should display first model when current model not found', () => {
@@ -76,36 +76,35 @@ describe('ModelSelector', () => {
     });
     selector.updateDisplay();
     const label = parentEl.querySelector('.claudian-model-label');
-    expect(label?.textContent).toBe('Haiku');
+    expect(label?.textContent).toBe('GPT-5 Codex');
   });
 
   it('should render model options in reverse order', () => {
     const dropdown = parentEl.querySelector('.claudian-model-dropdown');
     expect(dropdown).not.toBeNull();
-    // DEFAULT_CLAUDE_MODELS is [haiku, sonnet, opus] -> reversed is [opus, sonnet, haiku]
+    // DEFAULT_CLAUDE_MODELS is [gpt-5-codex, gpt-5, o4-mini] -> reversed is [o4-mini, gpt-5, gpt-5-codex]
     const options = dropdown?.children || [];
     expect(options.length).toBe(3);
     // Text is in child span, check first child's textContent
-    expect(options[0]?.children[0]?.textContent).toBe('Opus');
-    expect(options[1]?.children[0]?.textContent).toBe('Sonnet');
-    expect(options[2]?.children[0]?.textContent).toBe('Haiku');
+    expect(options[0]?.children[0]?.textContent).toBe('o4-mini');
+    expect(options[1]?.children[0]?.textContent).toBe('GPT-5');
+    expect(options[2]?.children[0]?.textContent).toBe('GPT-5 Codex');
   });
 
   it('should mark current model as selected', () => {
     const dropdown = parentEl.querySelector('.claudian-model-dropdown');
     const options = dropdown?.children || [];
-    // Sonnet is current (index 1 in reversed order)
-    const sonnetOption = options.find((o: any) => o.children[0]?.textContent === 'Sonnet');
-    expect(sonnetOption?.hasClass('selected')).toBe(true);
+    const selectedOption = options.find((o: any) => o.children[0]?.textContent === 'GPT-5 Codex');
+    expect(selectedOption?.hasClass('selected')).toBe(true);
   });
 
   it('should call onModelChange when option clicked', async () => {
     const dropdown = parentEl.querySelector('.claudian-model-dropdown');
     const options = dropdown?.children || [];
-    const opusOption = options.find((o: any) => o.children[0]?.textContent === 'Opus');
+    const o4MiniOption = options.find((o: any) => o.children[0]?.textContent === 'o4-mini');
 
-    await opusOption?.dispatchEvent('click', { stopPropagation: () => {} });
-    expect(callbacks.onModelChange).toHaveBeenCalledWith('opus');
+    await o4MiniOption?.dispatchEvent('click', { stopPropagation: () => {} });
+    expect(callbacks.onModelChange).toHaveBeenCalledWith('o4-mini');
   });
 
   it('should update display when setReady is called', () => {
@@ -117,16 +116,16 @@ describe('ModelSelector', () => {
     expect(btn?.hasClass('ready')).toBe(false);
   });
 
-  it('should show Sonnet (1M) when show1MModel is enabled', () => {
+  it('should keep codex label when show1MModel is enabled', () => {
     callbacks.getSettings.mockReturnValue({
-      model: 'sonnet',
+      model: 'gpt-5-codex',
       thinkingBudget: 'low',
       permissionMode: 'normal',
       show1MModel: true,
     });
     selector.updateDisplay();
     const label = parentEl.querySelector('.claudian-model-label');
-    expect(label?.textContent).toBe('Sonnet (1M)');
+    expect(label?.textContent).toBe('GPT-5 Codex');
   });
 
   it('should use custom models from environment variables', () => {

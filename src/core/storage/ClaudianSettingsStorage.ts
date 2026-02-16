@@ -19,8 +19,9 @@ import type { ClaudeModel, ClaudianSettings, PlatformBlockedCommands } from '../
 import { DEFAULT_SETTINGS, getDefaultBlockedCommands } from '../types';
 import type { VaultFileAdapter } from './VaultFileAdapter';
 
-/** Path to Claudian settings file relative to vault root. */
-export const CLAUDIAN_SETTINGS_PATH = '.claude/claudian-settings.json';
+/** Path to Codexian settings file relative to vault root. */
+export const CLAUDIAN_SETTINGS_PATH = '.codexian/settings.json';
+export const LEGACY_CLAUDIAN_SETTINGS_PATH = '.claude/claudian-settings.json';
 
 /** Fields that are loaded separately (slash commands from .claude/commands/). */
 type SeparatelyLoadedFields = 'slashCommands';
@@ -84,22 +85,31 @@ export class ClaudianSettingsStorage {
   * Throws if file exists but cannot be read or parsed.
   */
   async load(): Promise<StoredClaudianSettings> {
-    if (!(await this.adapter.exists(CLAUDIAN_SETTINGS_PATH))) {
-      return this.getDefaults();
+    let settingsPath = CLAUDIAN_SETTINGS_PATH;
+    if (!(await this.adapter.exists(settingsPath))) {
+      if (await this.adapter.exists(LEGACY_CLAUDIAN_SETTINGS_PATH)) {
+        settingsPath = LEGACY_CLAUDIAN_SETTINGS_PATH;
+      } else {
+        return this.getDefaults();
+      }
     }
 
-    const content = await this.adapter.read(CLAUDIAN_SETTINGS_PATH);
+    const content = await this.adapter.read(settingsPath);
     const stored = JSON.parse(content) as Record<string, unknown>;
     const { activeConversationId: _activeConversationId, ...storedWithoutLegacy } = stored;
 
     const blockedCommands = normalizeBlockedCommands(stored.blockedCommands);
-    const hostnameCliPaths = normalizeHostnameCliPaths(stored.claudeCliPathsByHost);
-    const legacyCliPath = typeof stored.claudeCliPath === 'string' ? stored.claudeCliPath : '';
+    const hostnameCliPaths = normalizeHostnameCliPaths(stored.codexCliPathsByHost ?? stored.claudeCliPathsByHost);
+    const legacyCliPath = typeof stored.codexCliPath === 'string'
+      ? stored.codexCliPath
+      : (typeof stored.claudeCliPath === 'string' ? stored.claudeCliPath : '');
 
     return {
       ...this.getDefaults(),
       ...storedWithoutLegacy,
       blockedCommands,
+      codexCliPath: legacyCliPath,
+      codexCliPathsByHost: hostnameCliPaths,
       claudeCliPath: legacyCliPath,
       claudeCliPathsByHost: hostnameCliPaths,
     } as StoredClaudianSettings;
@@ -124,11 +134,15 @@ export class ClaudianSettingsStorage {
    * Used only for one-time migration to tabManagerState.
    */
   async getLegacyActiveConversationId(): Promise<string | null> {
-    if (!(await this.adapter.exists(CLAUDIAN_SETTINGS_PATH))) {
-      return null;
+    let settingsPath: string | null = null;
+    if (await this.adapter.exists(CLAUDIAN_SETTINGS_PATH)) {
+      settingsPath = CLAUDIAN_SETTINGS_PATH;
+    } else if (await this.adapter.exists(LEGACY_CLAUDIAN_SETTINGS_PATH)) {
+      settingsPath = LEGACY_CLAUDIAN_SETTINGS_PATH;
     }
+    if (!settingsPath) return null;
 
-    const content = await this.adapter.read(CLAUDIAN_SETTINGS_PATH);
+    const content = await this.adapter.read(settingsPath);
     const stored = JSON.parse(content) as Record<string, unknown>;
     const value = stored.activeConversationId;
 
@@ -143,11 +157,15 @@ export class ClaudianSettingsStorage {
    * Remove legacy activeConversationId from claudian-settings.json.
    */
   async clearLegacyActiveConversationId(): Promise<void> {
-    if (!(await this.adapter.exists(CLAUDIAN_SETTINGS_PATH))) {
-      return;
+    let settingsPath: string | null = null;
+    if (await this.adapter.exists(CLAUDIAN_SETTINGS_PATH)) {
+      settingsPath = CLAUDIAN_SETTINGS_PATH;
+    } else if (await this.adapter.exists(LEGACY_CLAUDIAN_SETTINGS_PATH)) {
+      settingsPath = LEGACY_CLAUDIAN_SETTINGS_PATH;
     }
+    if (!settingsPath) return;
 
-    const content = await this.adapter.read(CLAUDIAN_SETTINGS_PATH);
+    const content = await this.adapter.read(settingsPath);
     const stored = JSON.parse(content) as Record<string, unknown>;
 
     if (!('activeConversationId' in stored)) {
@@ -156,7 +174,7 @@ export class ClaudianSettingsStorage {
 
     delete stored.activeConversationId;
     const nextContent = JSON.stringify(stored, null, 2);
-    await this.adapter.write(CLAUDIAN_SETTINGS_PATH, nextContent);
+    await this.adapter.write(settingsPath, nextContent);
   }
 
   async setLastModel(model: ClaudeModel, isCustom: boolean): Promise<void> {

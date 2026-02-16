@@ -240,7 +240,7 @@ export function getMissingNodeError(cliPath: string, enhancedPath?: string): str
     return null;
   }
 
-  return 'Claude Code CLI requires Node.js, but Node was not found on PATH. Install Node.js or use the native Claude Code binary, then restart Obsidian.';
+  return 'Codex CLI requires Node.js, but Node was not found on PATH. Install Node.js or use the native Codex binary, then restart Obsidian.';
 }
 
 /**

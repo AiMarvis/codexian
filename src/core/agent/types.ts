@@ -2,7 +2,7 @@
  * Types and constants for the ClaudianService module.
  */
 
-import type { SDKMessage, SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { SDKMessage, SDKUserMessage } from '@/core/sdk/codexAgentSdkCompat';
 
 import type { SystemPromptSettings } from '../prompts/mainAgent';
 import type { ClaudeModel, PermissionMode, StreamChunk } from '../types';

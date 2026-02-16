@@ -88,6 +88,10 @@ export function encodeVaultPathForSDK(vaultPath: string): string {
 }
 
 export function getSDKProjectsPath(): string {
+  const codexProjects = path.join(os.homedir(), '.codex', 'projects');
+  if (existsSync(codexProjects)) {
+    return codexProjects;
+  }
   return path.join(os.homedir(), '.claude', 'projects');
 }
 

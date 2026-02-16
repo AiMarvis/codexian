@@ -65,10 +65,10 @@
     }
   },
   "settings": {
-    "title": "Claudian Settings",
+    "title": "Codexian Settings",
     "customization": "Customization",
     "userName": {
-      "name": "What should Claudian call you?",
+      "name": "What should Codexian call you?",
       "desc": "Your name for personalized greetings (leave empty for generic greetings)"
     },
     "excludedTags": {
@@ -77,7 +77,7 @@
     },
     "mediaFolder": {
       "name": "Media folder",
-      "desc": "Folder containing attachments/images. When notes use ![[image.jpg]], Claude will look here. Leave empty for vault root."
+      "desc": "Folder containing attachments/images. When notes use ![[image.jpg]], Codex will look here. Leave empty for vault root."
     },
     "systemPrompt": {
       "name": "Custom system prompt",
@@ -138,20 +138,20 @@
     },
     "hiddenSlashCommands": {
       "name": "Hidden Commands",
-      "desc": "Hide specific slash commands from the dropdown. Useful for hiding Claude Code commands that are not relevant to Claudian. Enter command names without the leading slash, one per line.",
+      "desc": "Hide specific slash commands from the dropdown. Useful for hiding Codex commands that are not relevant to Codexian. Enter command names without the leading slash, one per line.",
       "placeholder": "commit\nbuild\ntest"
     },
     "mcpServers": {
       "name": "MCP Servers",
-      "desc": "Configure Model Context Protocol servers to extend Claude's capabilities with external tools and data sources. Servers with context-saving mode require @mention to activate."
+      "desc": "Configure Model Context Protocol servers to extend Codex's capabilities with external tools and data sources. Servers with context-saving mode require @mention to activate."
     },
     "plugins": {
-      "name": "Claude Code Plugins",
-      "desc": "Enable or disable Claude Code plugins discovered from ~/.claude/plugins. Enabled plugins are stored per vault."
+      "name": "Codex Plugins",
+      "desc": "Enable or disable Codex plugins discovered from ~/.codex/plugins. Enabled plugins are stored per vault."
     },
     "subagents": {
       "name": "Subagents",
-      "desc": "Configure custom subagents that Claude can delegate to.",
+      "desc": "Configure custom subagents that Codex can delegate to.",
       "noAgents": "No subagents configured. Click + to create one.",
       "deleteConfirm": "Delete subagent \"{name}\"?",
       "saveFailed": "Failed to save subagent: {message}",
@@ -188,8 +188,8 @@
     },
     "safety": "Safety",
     "loadUserSettings": {
-      "name": "Load user Claude settings",
-      "desc": "Load ~/.claude/settings.json. When enabled, user's Claude Code permission rules may bypass Safe mode."
+      "name": "Load user Codex settings",
+      "desc": "Load ~/.codex/settings.json. When enabled, user's Codex permission rules may bypass Safe mode."
     },
     "enableBlocklist": {
       "name": "Enable command blocklist",
@@ -208,7 +208,7 @@
     "environment": "Environment",
     "customVariables": {
       "name": "Custom variables",
-      "desc": "Environment variables for Claude SDK (KEY=VALUE format, one per line). Shell export prefix supported."
+      "desc": "Environment variables for Codex CLI (KEY=VALUE format, one per line). Shell export prefix supported."
     },
     "envSnippets": {
       "name": "Snippets",
@@ -241,7 +241,7 @@
     },
     "enableChrome": {
       "name": "Enable Chrome extension",
-      "desc": "Allow Claude to interact with Chrome via the claude-in-chrome extension. Requires the extension to be installed. Requires session restart."
+      "desc": "Allow Codex to interact with Chrome via the codex-in-chrome extension. Requires the extension to be installed. Requires session restart."
     },
     "enableBangBash": {
       "name": "Enable bash mode (!)",
@@ -252,7 +252,7 @@
     },
     "maxTabs": {
       "name": "Maximum chat tabs",
-      "desc": "Maximum number of concurrent chat tabs (3-10). Each tab uses a separate Claude session.",
+      "desc": "Maximum number of concurrent chat tabs (3-10). Each tab uses a separate Codex session.",
       "warning": "More than 5 tabs may impact performance and memory usage."
     },
     "tabBarPosition": {
@@ -263,17 +263,17 @@
     },
     "enableAutoScroll": {
       "name": "Auto-scroll during streaming",
-      "desc": "Automatically scroll to the bottom as Claude streams responses. Disable to stay at the top and read from the beginning."
+      "desc": "Automatically scroll to the bottom as Codex streams responses. Disable to stay at the top and read from the beginning."
     },
     "openInMainTab": {
       "name": "Open in main editor area",
       "desc": "Open chat panel as a main tab in the center editor area instead of the right sidebar"
     },
     "cliPath": {
-      "name": "Claude CLI path",
-      "desc": "Custom path to Claude Code CLI. Leave empty for auto-detection.",
-      "descWindows": "For the native installer, use claude.exe. For npm/pnpm/yarn or other package manager installs, use the cli.js path (not claude.cmd).",
-      "descUnix": "Paste the output of \"which claude\" — works for both native and npm/pnpm/yarn installs.",
+      "name": "Codex CLI path",
+      "desc": "Custom path to Codex CLI. Leave empty for auto-detection.",
+      "descWindows": "For the native installer, use codex.exe. For npm/pnpm/yarn or other package manager installs, use the cli.js path (not codex.cmd).",
+      "descUnix": "Paste the output of \"which codex\" — works for both native and npm/pnpm/yarn installs.",
       "validation": {
         "notExist": "Path does not exist",
         "isDirectory": "Path is a directory, not a file"

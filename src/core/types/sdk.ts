@@ -4,7 +4,7 @@
 
 /** SDK content block structure. */
 export interface SDKContentBlock {
-  type: 'text' | 'tool_use' | 'tool_result' | 'thinking';
+  type: 'text' | 'tool_use' | 'tool_result' | 'thinking' | 'image';
   text?: string;
   thinking?: string;
   id?: string;
@@ -13,6 +13,11 @@ export interface SDKContentBlock {
   tool_use_id?: string;
   content?: string | unknown;
   is_error?: boolean;
+  source?: {
+    type: 'base64';
+    media_type: string;
+    data: string;
+  };
 }
 
 /** SDK message content wrapper. */

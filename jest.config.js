@@ -7,6 +7,7 @@ const baseConfig = {
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   moduleNameMapper: {
+    '^@/core/sdk/codexAgentSdkCompat$': '<rootDir>/tests/__mocks__/claude-agent-sdk.ts',
     '^@/(.*)$': '<rootDir>/src/$1',
     '^@test/(.*)$': '<rootDir>/tests/$1',
     '^@anthropic-ai/claude-agent-sdk$': '<rootDir>/tests/__mocks__/claude-agent-sdk.ts',

@@ -83,7 +83,7 @@ export function getBashToolBlockedCommands(commands: PlatformBlockedCommands): s
 }
 
 /**
- * Platform-specific Claude CLI paths.
+ * Platform-specific Codex CLI paths.
  * @deprecated Use HostnameCliPaths instead. Kept for migration from older versions.
  */
 export interface PlatformCliPaths {
@@ -151,7 +151,7 @@ export function createPermissionRule(rule: string): PermissionRule {
 
 /**
  * CC-compatible permissions object.
- * Stored in .claude/settings.json for interoperability with Claude Code CLI.
+ * Stored in .codexian/cc-settings.json for project-local compatibility settings.
  */
 export interface CCPermissions {
   /** Rules that auto-approve tool actions */
@@ -167,8 +167,7 @@ export interface CCPermissions {
 }
 
 /**
- * CC-compatible settings stored in .claude/settings.json.
- * These settings are shared with Claude Code CLI.
+ * Codex-compatible settings stored in `.codexian/settings.json`.
  */
 export interface CCSettings {
   /** JSON Schema reference */
@@ -201,7 +200,7 @@ export interface EnvSnippet {
 /** Source of a slash command. */
 export type SlashCommandSource = 'builtin' | 'user' | 'plugin' | 'sdk';
 
-/** Slash command configuration with Claude Code compatibility. */
+/** Slash command configuration with Codex compatibility. */
 export interface SlashCommand {
   id: string;
   name: string;                // Command name used after / (e.g., "review-code")
@@ -211,7 +210,7 @@ export interface SlashCommand {
   model?: ClaudeModel;         // Override model for this command
   content: string;             // Prompt template with placeholders
   source?: SlashCommandSource; // Origin of the command (builtin, user, plugin, sdk)
-  // Skill fields (from .claude/skills/ definitions)
+  // Skill fields (from .codexian/skills/ definitions)
   disableModelInvocation?: boolean;  // Disable model invocation for this skill
   userInvocable?: boolean;           // Whether user can invoke this skill directly
   context?: 'fork';                  // Subagent execution mode
@@ -230,10 +229,10 @@ export interface KeyboardNavigationSettings {
 export type TabBarPosition = 'input' | 'header';
 
 /**
- * Claudian-specific settings stored in .claude/claudian-settings.json.
- * These settings are NOT shared with Claude Code CLI.
+ * Codexian-specific settings stored in `.codexian/settings.json`.
+ * These settings are NOT shared with Codex CLI's global config.
  */
-export interface ClaudianSettings {
+export interface CodexianSettings {
   // User preferences
   userName: string;
 
@@ -263,7 +262,7 @@ export interface ClaudianSettings {
   envSnippets: EnvSnippet[];
   /**
    * Custom context window limits for models configured via environment variables.
-   * Keys are model IDs (from ANTHROPIC_MODEL, ANTHROPIC_DEFAULT_*_MODEL env vars).
+   * Keys are model IDs (from OPENAI_MODEL / CODEX_MODEL style env vars).
    * Values are token counts in range [1000, 10000000].
    * Empty object means all models use default context limits (200k or 1M for Sonnet).
    */
@@ -276,16 +275,26 @@ export interface ClaudianSettings {
   locale: Locale;  // UI language setting
 
   // CLI paths
-  claudeCliPath: string;  // Legacy: single CLI path (for backwards compatibility)
-  claudeCliPathsByHost: HostnameCliPaths;  // Per-device paths keyed by hostname (preferred)
-  loadUserClaudeSettings: boolean;  // Load ~/.claude/settings.json (may override permissions)
+  codexCliPath?: string;  // Legacy: single CLI path (for backwards compatibility)
+  codexCliPathsByHost?: HostnameCliPaths;  // Per-device paths keyed by hostname (preferred)
+  loadUserCodexSettings?: boolean;  // Load ~/.codex/config.toml compatible overrides when available
+
+  // Backward-compatible legacy aliases (read-only migration support)
+  /** @deprecated migrated to codexCliPath */
+  claudeCliPath: string;
+  /** @deprecated migrated to codexCliPathsByHost */
+  claudeCliPathsByHost: HostnameCliPaths;
+  /** @deprecated migrated to loadUserCodexSettings */
+  loadUserClaudeSettings: boolean;
 
   // State (merged from data.json)
+  lastCodexModel?: ClaudeModel;
+  /** @deprecated Use lastCodexModel */
   lastClaudeModel?: ClaudeModel;
   lastCustomModel?: ClaudeModel;
   lastEnvHash?: string;
 
-  // Slash commands (loaded separately from .claude/commands/)
+  // Slash commands (loaded separately from .codexian/commands/)
   slashCommands: SlashCommand[];
 
   // UI preferences
@@ -298,8 +307,11 @@ export interface ClaudianSettings {
   hiddenSlashCommands: string[];  // Command names to hide from dropdown (user preference)
 }
 
-/** Default Claudian-specific settings. */
-export const DEFAULT_SETTINGS: ClaudianSettings = {
+/** @deprecated Use CodexianSettings. */
+export type ClaudianSettings = CodexianSettings;
+
+/** Default Codexian-specific settings. */
+export const DEFAULT_SETTINGS: CodexianSettings = {
   // User preferences
   userName: '',
 
@@ -309,10 +321,10 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   permissionMode: 'yolo',
 
   // Model & thinking
-  model: 'haiku',
+  model: 'gpt-5-codex',
   thinkingBudget: 'off',
   enableAutoTitleGeneration: true,
-  titleGenerationModel: '',  // Empty = auto (ANTHROPIC_DEFAULT_HAIKU_MODEL or claude-haiku-4-5)
+  titleGenerationModel: '',  // Empty = auto
   show1MModel: false,  // Hidden by default
   enableChrome: false,  // Disabled by default
   enableBangBash: false,  // Disabled by default
@@ -340,11 +352,17 @@ export const DEFAULT_SETTINGS: ClaudianSettings = {
   locale: 'en',  // Default to English
 
   // CLI paths
-  claudeCliPath: '',  // Legacy field (empty = not migrated)
-  claudeCliPathsByHost: {},  // Per-device paths keyed by hostname
-  loadUserClaudeSettings: true,  // Default on for compatibility
+  codexCliPath: '',  // Legacy field (empty = not migrated)
+  codexCliPathsByHost: {},  // Per-device paths keyed by hostname
+  loadUserCodexSettings: true,  // Default on for compatibility
 
-  lastClaudeModel: 'haiku',
+  // Legacy aliases (kept empty; populated only while migrating old settings)
+  claudeCliPath: '',
+  claudeCliPathsByHost: {},
+  loadUserClaudeSettings: true,
+
+  lastCodexModel: 'gpt-5-codex',
+  lastClaudeModel: 'gpt-5-codex',
   lastCustomModel: '',
   lastEnvHash: '',
 

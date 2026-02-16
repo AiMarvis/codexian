@@ -27,7 +27,8 @@ import { CLAUDIAN_ONLY_FIELDS } from './migrationConstants';
 import type { VaultFileAdapter } from './VaultFileAdapter';
 
 /** Path to CC settings file relative to vault root. */
-export const CC_SETTINGS_PATH = '.claude/settings.json';
+export const CC_SETTINGS_PATH = '.codexian/cc-settings.json';
+export const LEGACY_CC_SETTINGS_PATH = '.claude/settings.json';
 
 /** Schema URL for CC settings. */
 const CC_SETTINGS_SCHEMA = 'https://json.schemastore.org/claude-code-settings.json';
@@ -95,11 +96,16 @@ export class CCSettingsStorage {
    * Throws if file exists but cannot be read or parsed.
    */
   async load(): Promise<CCSettings> {
-    if (!(await this.adapter.exists(CC_SETTINGS_PATH))) {
-      return { ...DEFAULT_CC_SETTINGS };
+    let settingsPath = CC_SETTINGS_PATH;
+    if (!(await this.adapter.exists(settingsPath))) {
+      if (await this.adapter.exists(LEGACY_CC_SETTINGS_PATH)) {
+        settingsPath = LEGACY_CC_SETTINGS_PATH;
+      } else {
+        return { ...DEFAULT_CC_SETTINGS };
+      }
     }
 
-    const content = await this.adapter.read(CC_SETTINGS_PATH);
+    const content = await this.adapter.read(settingsPath);
     const stored = JSON.parse(content) as Record<string, unknown>;
 
     // Check for legacy format and migrate if needed
@@ -131,9 +137,13 @@ export class CCSettingsStorage {
   async save(settings: CCSettings, stripClaudianFields: boolean = false): Promise<void> {
     // Load existing to preserve CC-specific fields we don't manage
     let existing: Record<string, unknown> = {};
-    if (await this.adapter.exists(CC_SETTINGS_PATH)) {
+    const existingPath = (await this.adapter.exists(CC_SETTINGS_PATH))
+      ? CC_SETTINGS_PATH
+      : ((await this.adapter.exists(LEGACY_CC_SETTINGS_PATH)) ? LEGACY_CC_SETTINGS_PATH : null);
+
+    if (existingPath) {
       try {
-        const content = await this.adapter.read(CC_SETTINGS_PATH);
+        const content = await this.adapter.read(existingPath);
         const parsed = JSON.parse(content) as Record<string, unknown>;
 
         // Only strip Claudian-only fields during explicit migration

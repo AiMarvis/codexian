@@ -9,7 +9,14 @@ function createMockAdapter(initialFiles: Record<string, string> = {}) {
 
   return {
     adapter: {
-      exists: jest.fn(async (path: string) => files.has(path) || folders.has(path)),
+      exists: jest.fn(async (path: string) => {
+        if (files.has(path) || folders.has(path)) {
+          return true;
+        }
+        const prefix = `${path}/`;
+        return Array.from(files.keys()).some(fp => fp.startsWith(prefix))
+          || Array.from(folders).some(folder => folder.startsWith(prefix));
+      }),
       read: jest.fn(async (path: string) => {
         const content = files.get(path);
         if (content === undefined) throw new Error(`Missing file: ${path}`);
@@ -79,7 +86,7 @@ describe('StorageService convenience methods', () => {
     it('delegates to ccSettings.getPermissions', async () => {
       const { plugin } = createMockPlugin({
         initialFiles: {
-          '.claude/settings.json': ccSettingsJson,
+          '.codexian/cc-settings.json': ccSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -95,7 +102,7 @@ describe('StorageService convenience methods', () => {
     it('saves updated permissions via ccSettings', async () => {
       const { plugin, files } = createMockPlugin({
         initialFiles: {
-          '.claude/settings.json': ccSettingsJson,
+          '.codexian/cc-settings.json': ccSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -107,7 +114,7 @@ describe('StorageService convenience methods', () => {
         ask: [],
       });
 
-      const saved = JSON.parse(files.get('.claude/settings.json')!) as Record<string, unknown>;
+      const saved = JSON.parse(files.get('.codexian/cc-settings.json')!) as Record<string, unknown>;
       expect((saved.permissions as { allow: string[] }).allow).toContainEqual('Read');
     });
   });
@@ -116,7 +123,7 @@ describe('StorageService convenience methods', () => {
     it('adds a new allow rule', async () => {
       const { plugin, files } = createMockPlugin({
         initialFiles: {
-          '.claude/settings.json': ccSettingsJson,
+          '.codexian/cc-settings.json': ccSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -124,7 +131,7 @@ describe('StorageService convenience methods', () => {
 
       await storage.addAllowRule('Read(/vault/*)');
 
-      const saved = JSON.parse(files.get('.claude/settings.json')!) as Record<string, unknown>;
+      const saved = JSON.parse(files.get('.codexian/cc-settings.json')!) as Record<string, unknown>;
       expect((saved.permissions as { allow: string[] }).allow).toContainEqual('Read(/vault/*)');
     });
   });
@@ -133,7 +140,7 @@ describe('StorageService convenience methods', () => {
     it('adds a new deny rule', async () => {
       const { plugin, files } = createMockPlugin({
         initialFiles: {
-          '.claude/settings.json': ccSettingsJson,
+          '.codexian/cc-settings.json': ccSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -141,7 +148,7 @@ describe('StorageService convenience methods', () => {
 
       await storage.addDenyRule('Write(/etc/*)');
 
-      const saved = JSON.parse(files.get('.claude/settings.json')!) as Record<string, unknown>;
+      const saved = JSON.parse(files.get('.codexian/cc-settings.json')!) as Record<string, unknown>;
       expect((saved.permissions as { deny: string[] }).deny).toContainEqual('Write(/etc/*)');
     });
   });
@@ -156,14 +163,14 @@ describe('StorageService convenience methods', () => {
         },
       });
       const { plugin, files } = createMockPlugin({
-        initialFiles: { '.claude/settings.json': settings },
+        initialFiles: { '.codexian/cc-settings.json': settings },
       });
       const storage = new StorageService(plugin);
       await storage.initialize();
 
       await storage.removePermissionRule('Bash(git *)');
 
-      const saved = JSON.parse(files.get('.claude/settings.json')!) as Record<string, unknown>;
+      const saved = JSON.parse(files.get('.codexian/cc-settings.json')!) as Record<string, unknown>;
       const perms = saved.permissions as { allow: string[]; deny: string[]; ask: string[] };
       expect(perms.allow).not.toContainEqual('Bash(git *)');
       expect(perms.deny).not.toContainEqual('Bash(git *)');
@@ -175,7 +182,7 @@ describe('StorageService convenience methods', () => {
     it('updates partial claudian settings', async () => {
       const { plugin, files } = createMockPlugin({
         initialFiles: {
-          '.claude/claudian-settings.json': claudianSettingsJson,
+          '.codexian/settings.json': claudianSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -183,7 +190,7 @@ describe('StorageService convenience methods', () => {
 
       await storage.updateClaudianSettings({ userName: 'NewUser' });
 
-      const saved = JSON.parse(files.get('.claude/claudian-settings.json')!) as Record<string, unknown>;
+      const saved = JSON.parse(files.get('.codexian/settings.json')!) as Record<string, unknown>;
       expect(saved.userName).toBe('NewUser');
     });
   });
@@ -192,7 +199,7 @@ describe('StorageService convenience methods', () => {
     it('saves full claudian settings', async () => {
       const { plugin, files } = createMockPlugin({
         initialFiles: {
-          '.claude/claudian-settings.json': claudianSettingsJson,
+          '.codexian/settings.json': claudianSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -202,7 +209,7 @@ describe('StorageService convenience methods', () => {
       existing.userName = 'FullSave';
       await storage.saveClaudianSettings(existing);
 
-      const saved = JSON.parse(files.get('.claude/claudian-settings.json')!) as Record<string, unknown>;
+      const saved = JSON.parse(files.get('.codexian/settings.json')!) as Record<string, unknown>;
       expect(saved.userName).toBe('FullSave');
     });
   });
@@ -211,7 +218,7 @@ describe('StorageService convenience methods', () => {
     it('loads claudian settings', async () => {
       const { plugin } = createMockPlugin({
         initialFiles: {
-          '.claude/claudian-settings.json': claudianSettingsJson,
+          '.codexian/settings.json': claudianSettingsJson,
         },
       });
       const storage = new StorageService(plugin);
@@ -239,8 +246,8 @@ describe('StorageService convenience methods', () => {
       ].join('\n');
       const { plugin } = createMockPlugin({
         initialFiles: {
-          '.claude/commands/review.md': commandContent,
-          '.claude/skills/my-skill/SKILL.md': skillContent,
+          '.codexian/commands/review.md': commandContent,
+          '.codexian/skills/my-skill/SKILL.md': skillContent,
         },
       });
       const storage = new StorageService(plugin);
@@ -279,7 +286,7 @@ describe('StorageService convenience methods', () => {
       });
       const { plugin } = createMockPlugin({
         initialFiles: {
-          '.claude/claudian-settings.json': settings,
+          '.codexian/settings.json': settings,
         },
       });
       const storage = new StorageService(plugin);
@@ -293,7 +300,7 @@ describe('StorageService convenience methods', () => {
       const { plugin } = createMockPlugin({
         dataJson: { activeConversationId: 'conv-from-data' },
         initialFiles: {
-          '.claude/claudian-settings.json': JSON.stringify({ userName: 'Test' }),
+          '.codexian/settings.json': JSON.stringify({ userName: 'Test' }),
         },
       });
       const storage = new StorageService(plugin);
@@ -307,7 +314,7 @@ describe('StorageService convenience methods', () => {
       const { plugin } = createMockPlugin({
         dataJson: {},
         initialFiles: {
-          '.claude/claudian-settings.json': JSON.stringify({ userName: 'Test' }),
+          '.codexian/settings.json': JSON.stringify({ userName: 'Test' }),
         },
       });
       const storage = new StorageService(plugin);
@@ -323,7 +330,7 @@ describe('StorageService convenience methods', () => {
       const { plugin } = createMockPlugin({
         dataJson: { activeConversationId: 'conv-1', otherField: 'keep' },
         initialFiles: {
-          '.claude/claudian-settings.json': JSON.stringify({ userName: 'Test' }),
+          '.codexian/settings.json': JSON.stringify({ userName: 'Test' }),
         },
       });
       const storage = new StorageService(plugin);
@@ -347,7 +354,7 @@ describe('StorageService convenience methods', () => {
       const { plugin } = createMockPlugin({
         dataJson: { otherField: 'keep' },
         initialFiles: {
-          '.claude/claudian-settings.json': JSON.stringify({ userName: 'Test' }),
+          '.codexian/settings.json': JSON.stringify({ userName: 'Test' }),
         },
       });
       const storage = new StorageService(plugin);

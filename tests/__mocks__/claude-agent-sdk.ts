@@ -1,4 +1,4 @@
-// Mock for @anthropic-ai/claude-agent-sdk
+// Mock for @/core/sdk/codexAgentSdkCompat
 
 export interface HookCallbackMatcher {
   matcher?: string;

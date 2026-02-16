@@ -27,7 +27,7 @@ import { DEFAULT_MCP_SERVER, isValidMcpServerConfig } from '../types';
 import type { VaultFileAdapter } from './VaultFileAdapter';
 
 /** Path to MCP config file relative to vault root. */
-export const MCP_CONFIG_PATH = '.claude/mcp.json';
+export const MCP_CONFIG_PATH = '.codexian/mcp.json';
 
 export class McpStorage {
   constructor(private adapter: VaultFileAdapter) {}

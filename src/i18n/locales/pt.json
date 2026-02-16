@@ -65,10 +65,10 @@
     }
   },
   "settings": {
-    "title": "Configurações do Claudian",
+    "title": "Configurações do Codexian",
     "customization": "Personalização",
     "userName": {
-      "name": "Como o Claudian deve chamá-lo?",
+      "name": "Como o Codexian deve chamá-lo?",
       "desc": "Seu nome para saudações personalizadas (deixe vazio para saudações genéricas)"
     },
     "excludedTags": {
@@ -77,7 +77,7 @@
     },
     "mediaFolder": {
       "name": "Pasta de mídia",
-      "desc": "Pasta contendo anexos/imagens. Quando notas usam ![[image.jpg]], Claude procurará aqui. Deixe vazio para a raiz do repositório."
+      "desc": "Pasta contendo anexos/imagens. Quando notas usam ![[image.jpg]], Codex procurará aqui. Deixe vazio para a raiz do repositório."
     },
     "systemPrompt": {
       "name": "Prompt de sistema personalizado",
@@ -138,20 +138,20 @@
     },
     "hiddenSlashCommands": {
       "name": "Comandos ocultos",
-      "desc": "Ocultar comandos slash específicos do menu suspenso. Útil para ocultar comandos do Claude Code que não são relevantes para o Claudian. Digite os nomes dos comandos sem a barra inicial, um por linha.",
+      "desc": "Ocultar comandos slash específicos do menu suspenso. Útil para ocultar comandos do Codex que não são relevantes para o Codexian. Digite os nomes dos comandos sem a barra inicial, um por linha.",
       "placeholder": "commit\nbuild\ntest"
     },
     "mcpServers": {
       "name": "Servidores MCP",
-      "desc": "Configure servidores Model Context Protocol para estender as capacidades do Claude com ferramentas e fontes de dados externas. Servidores com modo de salvamento de contexto exigem @mention para ativar."
+      "desc": "Configure servidores Model Context Protocol para estender as capacidades do Codex com ferramentas e fontes de dados externas. Servidores com modo de salvamento de contexto exigem @mention para ativar."
     },
     "plugins": {
-      "name": "Plugins do Claude Code",
-      "desc": "Ative ou desative plugins do Claude Code descobertos em ~/.claude/plugins. Plugins ativados são armazenados por cofre."
+      "name": "Plugins do Codex",
+      "desc": "Ative ou desative plugins do Codex descobertos em ~/.codex/plugins. Plugins ativados são armazenados por cofre."
     },
     "subagents": {
       "name": "Subagents",
-      "desc": "Configure custom subagents that Claude can delegate to.",
+      "desc": "Configure custom subagents that Codex can delegate to.",
       "noAgents": "No subagents configured. Click + to create one.",
       "deleteConfirm": "Delete subagent \"{name}\"?",
       "saveFailed": "Failed to save subagent: {message}",
@@ -188,8 +188,8 @@
     },
     "safety": "Segurança",
     "loadUserSettings": {
-      "name": "Carregar configurações do usuário Claude",
-      "desc": "Carrega ~/.claude/settings.json. Quando habilitado, as regras de permissão do usuário podem ignorar o modo seguro."
+      "name": "Carregar configurações do usuário Codex",
+      "desc": "Carrega ~/.codex/settings.json. Quando habilitado, as regras de permissão do usuário podem ignorar o modo seguro."
     },
     "enableBlocklist": {
       "name": "Habilitar lista negra de comandos",
@@ -208,7 +208,7 @@
     "environment": "Ambiente",
     "customVariables": {
       "name": "Variáveis personalizadas",
-      "desc": "Variáveis de ambiente para Claude SDK (formato KEY=VALUE, uma por linha). Prefixo export suportado."
+      "desc": "Variáveis de ambiente para Codex CLI (formato KEY=VALUE, uma por linha). Prefixo export suportado."
     },
     "envSnippets": {
       "name": "Snippets",
@@ -241,7 +241,7 @@
     },
     "enableChrome": {
       "name": "Habilitar extensão do Chrome",
-      "desc": "Permitir que o Claude interaja com o Chrome através da extensão claude-in-chrome. Requer que a extensão esteja instalada. Requer reinício de sessão."
+      "desc": "Permitir que o Codex interaja com o Chrome através da extensão codex-in-chrome. Requer que a extensão esteja instalada. Requer reinício de sessão."
     },
     "enableBangBash": {
       "name": "Enable bash mode (!)",
@@ -252,7 +252,7 @@
     },
     "maxTabs": {
       "name": "Máximo de abas de chat",
-      "desc": "Número máximo de abas de chat simultâneas (3-10). Cada aba usa uma sessão Claude separada.",
+      "desc": "Número máximo de abas de chat simultâneas (3-10). Cada aba usa uma sessão Codex separada.",
       "warning": "Mais de 5 abas pode afetar o desempenho e o uso de memória."
     },
     "tabBarPosition": {
@@ -263,17 +263,17 @@
     },
     "enableAutoScroll": {
       "name": "Rolagem automática durante streaming",
-      "desc": "Rolar automaticamente para baixo enquanto o Claude transmite respostas. Desativar para ficar no topo e ler desde o início."
+      "desc": "Rolar automaticamente para baixo enquanto o Codex transmite respostas. Desativar para ficar no topo e ler desde o início."
     },
     "openInMainTab": {
       "name": "Abrir na área do editor principal",
       "desc": "Abrir o painel de chat como uma aba principal na área do editor central em vez da barra lateral direita"
     },
     "cliPath": {
-      "name": "Caminho CLI Claude",
-      "desc": "Caminho personalizado para Claude Code CLI. Deixe vazio para detecção automática.",
-      "descWindows": "Para o instalador nativo, use claude.exe. Para instalações com npm/pnpm/yarn ou outros gerenciadores de pacotes, use o caminho cli.js (não claude.cmd).",
-      "descUnix": "Cole a saída de \"which claude\" — funciona tanto para instalações nativas quanto npm/pnpm/yarn.",
+      "name": "Caminho CLI Codex",
+      "desc": "Caminho personalizado para Codex CLI. Deixe vazio para detecção automática.",
+      "descWindows": "Para o instalador nativo, use codex.exe. Para instalações com npm/pnpm/yarn ou outros gerenciadores de pacotes, use o caminho cli.js (não codex.cmd).",
+      "descUnix": "Cole a saída de \"which codex\" — funciona tanto para instalações nativas quanto npm/pnpm/yarn.",
       "validation": {
         "notExist": "Caminho não existe",
         "isDirectory": "Caminho é um diretório, não um arquivo"

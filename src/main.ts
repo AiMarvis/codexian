@@ -32,7 +32,7 @@ import { ClaudianView } from './features/chat/ClaudianView';
 import { type InlineEditContext, InlineEditModal } from './features/inline-edit/ui/InlineEditModal';
 import { ClaudianSettingTab } from './features/settings/ClaudianSettings';
 import { setLocale } from './i18n';
-import { ClaudeCliResolver } from './utils/claudeCli';
+import { CodexCliResolver } from './utils/codexCli';
 import { buildCursorContext } from './utils/editor';
 import { getCurrentModelFromEnvironment, getModelsFromEnvironment, parseEnvironmentVariables } from './utils/env';
 import { getVaultPath } from './utils/path';
@@ -54,14 +54,14 @@ export default class ClaudianPlugin extends Plugin {
   pluginManager: PluginManager;
   agentManager: AgentManager;
   storage: StorageService;
-  cliResolver: ClaudeCliResolver;
+  cliResolver: CodexCliResolver;
   private conversations: Conversation[] = [];
   private runtimeEnvironmentVariables = '';
 
   async onload() {
     await this.loadSettings();
 
-    this.cliResolver = new ClaudeCliResolver();
+    this.cliResolver = new CodexCliResolver();
 
     // Initialize MCP manager (shared for agent + UI)
     this.mcpManager = new McpServerManager(this.storage.mcp);
@@ -81,7 +81,7 @@ export default class ClaudianPlugin extends Plugin {
       (leaf) => new ClaudianView(leaf, this)
     );
 
-    this.addRibbonIcon('bot', 'Open Claudian', () => {
+    this.addRibbonIcon('bot', 'Open Codexian', () => {
       this.activateView();
     });
 
@@ -244,25 +244,41 @@ export default class ClaudianPlugin extends Plugin {
       this.settings.permissionMode = 'normal';
     }
 
+    this.settings.codexCliPathsByHost ??= {};
+    this.settings.codexCliPath ??= '';
+    this.settings.loadUserCodexSettings ??= this.settings.loadUserClaudeSettings ?? true;
+
     // Initialize and migrate legacy CLI paths to hostname-based paths
-    this.settings.claudeCliPathsByHost ??= {};
+    this.settings.codexCliPathsByHost ??= this.settings.claudeCliPathsByHost ?? {};
     const hostname = getHostnameKey();
     let didMigrateCliPath = false;
 
-    if (!this.settings.claudeCliPathsByHost[hostname]) {
+    if (!this.settings.codexCliPathsByHost[hostname]) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const platformPaths = (this.settings as any).claudeCliPaths as Record<string, string> | undefined;
-      const migratedPath = platformPaths?.[getCliPlatformKey()]?.trim() || this.settings.claudeCliPath?.trim();
+      const platformPaths = (this.settings as any).codexCliPaths as Record<string, string> | undefined
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        || (this.settings as any).claudeCliPaths as Record<string, string> | undefined;
+      const migratedPath = platformPaths?.[getCliPlatformKey()]?.trim()
+        || this.settings.codexCliPath?.trim()
+        || this.settings.claudeCliPath?.trim();
 
       if (migratedPath) {
-        this.settings.claudeCliPathsByHost[hostname] = migratedPath;
+        this.settings.codexCliPathsByHost[hostname] = migratedPath;
+        this.settings.codexCliPath = '';
         this.settings.claudeCliPath = '';
         didMigrateCliPath = true;
       }
     }
 
+    // Mirror legacy aliases so older runtime paths still read the same effective value.
+    this.settings.claudeCliPathsByHost = this.settings.codexCliPathsByHost ?? {};
+    this.settings.claudeCliPath = this.settings.codexCliPath ?? '';
+    this.settings.loadUserClaudeSettings = this.settings.loadUserCodexSettings ?? true;
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     delete (this.settings as any).claudeCliPaths;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (this.settings as any).codexCliPaths;
 
     // Load all conversations from session files (legacy JSONL + native metadata)
     const { conversations: legacyConversations, failedCount } = await this.storage.sessions.loadAllConversations();
@@ -476,10 +492,14 @@ export default class ClaudianPlugin extends Plugin {
 
   getResolvedClaudeCliPath(): string | null {
     return this.cliResolver.resolve(
-      this.settings.claudeCliPathsByHost,  // Per-device paths (preferred)
-      this.settings.claudeCliPath,          // Legacy path (fallback)
+      this.settings.codexCliPathsByHost || this.settings.claudeCliPathsByHost,  // Per-device paths (preferred)
+      this.settings.codexCliPath || this.settings.claudeCliPath,                  // Legacy path (fallback)
       this.getActiveEnvironmentVariables()
     );
+  }
+
+  getResolvedCodexCliPath(): string | null {
+    return this.getResolvedClaudeCliPath();
   }
 
   private getDefaultModelValues(): string[] {
@@ -498,6 +518,8 @@ export default class ClaudianPlugin extends Plugin {
   private computeEnvHash(envText: string): string {
     const envVars = parseEnvironmentVariables(envText || '');
     const modelKeys = [
+      'OPENAI_MODEL',
+      'CODEX_MODEL',
       'ANTHROPIC_MODEL',
       'ANTHROPIC_DEFAULT_OPUS_MODEL',
       'ANTHROPIC_DEFAULT_SONNET_MODEL',

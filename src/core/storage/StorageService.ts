@@ -32,13 +32,20 @@ import {
   legacyPermissionsToCCPermissions,
 } from '../types';
 import { AGENTS_PATH, AgentVaultStorage } from './AgentVaultStorage';
-import { CC_SETTINGS_PATH, CCSettingsStorage, isLegacyPermissionsFormat } from './CCSettingsStorage';
 import {
+  CC_SETTINGS_PATH,
+  CCSettingsStorage,
+  isLegacyPermissionsFormat,
+  LEGACY_CC_SETTINGS_PATH,
+} from './CCSettingsStorage';
+import {
+  CLAUDIAN_SETTINGS_PATH,
   ClaudianSettingsStorage,
+  LEGACY_CLAUDIAN_SETTINGS_PATH,
   normalizeBlockedCommands,
   type StoredClaudianSettings,
 } from './ClaudianSettingsStorage';
-import { McpStorage } from './McpStorage';
+import { MCP_CONFIG_PATH, McpStorage } from './McpStorage';
 import {
   CLAUDIAN_ONLY_FIELDS,
   convertEnvObjectToString,
@@ -49,8 +56,12 @@ import { SKILLS_PATH, SkillStorage } from './SkillStorage';
 import { COMMANDS_PATH, SlashCommandStorage } from './SlashCommandStorage';
 import { VaultFileAdapter } from './VaultFileAdapter';
 
-/** Base path for all Claudian storage. */
-export const CLAUDE_PATH = '.claude';
+/** Base path for all Codexian storage. */
+export const CODEXIAN_PATH = '.codexian';
+/** @deprecated Legacy alias. */
+export const CLAUDE_PATH = CODEXIAN_PATH;
+export const LEGACY_CLAUDE_PATH = '.claude';
+export const CLAUDE_TO_CODEX_MIGRATION_MARKER = `${CODEXIAN_PATH}/migrations/claude-to-codex-v1.json`;
 
 /** Legacy settings path (now CC settings). */
 export const SETTINGS_PATH = CC_SETTINGS_PATH;
@@ -138,6 +149,7 @@ export class StorageService {
 
   async initialize(): Promise<CombinedSettings> {
     await this.ensureDirectories();
+    await this.migrateLegacyClaudeDataOnce();
     await this.runMigrations();
 
     const cc = await this.ccSettings.load();
@@ -177,6 +189,152 @@ export class StorageService {
         await this.clearLegacyDataJson();
       }
     }
+  }
+
+  private async migrateLegacyClaudeDataOnce(): Promise<void> {
+    if (await this.adapter.exists(CLAUDE_TO_CODEX_MIGRATION_MARKER)) {
+      return;
+    }
+
+    if (!(await this.adapter.exists(LEGACY_CLAUDE_PATH))) {
+      return;
+    }
+
+    const backupPath = `.claude.backup-${this.getTimestampForBackup()}`;
+    const createdTargets: string[] = [];
+
+    try {
+      // Safety-first backup before any write to the new storage root.
+      await this.copyDirectoryRecursive(LEGACY_CLAUDE_PATH, backupPath);
+
+      const mappings: Array<{ source: string; target: string }> = [
+        { source: LEGACY_CLAUDIAN_SETTINGS_PATH, target: CLAUDIAN_SETTINGS_PATH },
+        { source: LEGACY_CC_SETTINGS_PATH, target: CC_SETTINGS_PATH },
+        { source: `${LEGACY_CLAUDE_PATH}/sessions`, target: SESSIONS_PATH },
+        { source: `${LEGACY_CLAUDE_PATH}/commands`, target: COMMANDS_PATH },
+        { source: `${LEGACY_CLAUDE_PATH}/agents`, target: AGENTS_PATH },
+        { source: `${LEGACY_CLAUDE_PATH}/skills`, target: SKILLS_PATH },
+        { source: `${LEGACY_CLAUDE_PATH}/mcp.json`, target: MCP_CONFIG_PATH },
+      ];
+
+      for (const mapping of mappings) {
+        if (!(await this.adapter.exists(mapping.source))) {
+          continue;
+        }
+
+        if (await this.adapter.exists(mapping.target)) {
+          continue;
+        }
+
+        await this.copyPathRecursive(mapping.source, mapping.target);
+        createdTargets.push(mapping.target);
+      }
+
+      await this.adapter.ensureFolder(`${CODEXIAN_PATH}/migrations`);
+      await this.adapter.write(
+        CLAUDE_TO_CODEX_MIGRATION_MARKER,
+        JSON.stringify({
+          version: 1,
+          migratedAt: Date.now(),
+          backupPath,
+          sourceRoot: LEGACY_CLAUDE_PATH,
+          targetRoot: CODEXIAN_PATH,
+        }, null, 2)
+      );
+    } catch (error) {
+      for (const target of createdTargets.reverse()) {
+        await this.removePathRecursive(target);
+      }
+      new Notice(
+        `Codexian migration failed. New files were rolled back. Legacy backup is available at ${backupPath}.`
+      );
+      throw error;
+    }
+  }
+
+  private getTimestampForBackup(): string {
+    const d = new Date();
+    const pad = (n: number) => String(n).padStart(2, '0');
+    return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  }
+
+  private async copyPathRecursive(source: string, target: string): Promise<void> {
+    if (!(await this.adapter.exists(source))) {
+      return;
+    }
+
+    // If list() succeeds, this is a folder; if it throws, treat as file.
+    try {
+      await this.adapter.listFiles(source);
+      await this.copyDirectoryRecursive(source, target);
+      return;
+    } catch {
+      // Fall through to file copy.
+    }
+
+    const content = await this.adapter.read(source);
+    await this.adapter.write(target, content);
+  }
+
+  private async copyDirectoryRecursive(sourceDir: string, targetDir: string): Promise<void> {
+    if (!(await this.adapter.exists(sourceDir))) {
+      return;
+    }
+
+    await this.adapter.ensureFolder(targetDir);
+
+    const files = await this.adapter.listFiles(sourceDir);
+    for (const file of files) {
+      const fileName = file.split('/').pop();
+      if (!fileName) {
+        continue;
+      }
+      const content = await this.adapter.read(file);
+      await this.adapter.write(`${targetDir}/${fileName}`, content);
+    }
+
+    const folders = await this.adapter.listFolders(sourceDir);
+    for (const folder of folders) {
+      const folderName = folder.split('/').pop();
+      if (!folderName) {
+        continue;
+      }
+      await this.copyDirectoryRecursive(folder, `${targetDir}/${folderName}`);
+    }
+  }
+
+  private async removePathRecursive(target: string): Promise<void> {
+    if (!(await this.adapter.exists(target))) {
+      return;
+    }
+
+    try {
+      await this.adapter.listFiles(target);
+      await this.removeDirectoryRecursive(target);
+      return;
+    } catch {
+      // It's likely a file.
+    }
+
+    await this.adapter.delete(target);
+  }
+
+  private async removeDirectoryRecursive(dir: string): Promise<void> {
+    if (!(await this.adapter.exists(dir))) {
+      return;
+    }
+
+    const files = await this.adapter.listFiles(dir);
+    for (const file of files) {
+      await this.adapter.delete(file);
+    }
+
+    const folders = await this.adapter.listFolders(dir);
+    for (const folder of folders) {
+      await this.removeDirectoryRecursive(folder);
+    }
+
+    await this.adapter.deleteFolder(dir);
   }
 
   private hasStateToMigrate(data: LegacyDataJson): boolean {
@@ -239,8 +397,11 @@ export class StorageService {
       allowedExportPaths: oldSettings.allowedExportPaths ?? DEFAULT_SETTINGS.allowedExportPaths,
       persistentExternalContextPaths: DEFAULT_SETTINGS.persistentExternalContextPaths,
       keyboardNavigation: oldSettings.keyboardNavigation as StoredClaudianSettings['keyboardNavigation'] ?? DEFAULT_SETTINGS.keyboardNavigation,
+      codexCliPath: oldSettings.claudeCliPath ?? DEFAULT_SETTINGS.codexCliPath,
+      codexCliPathsByHost: DEFAULT_SETTINGS.codexCliPathsByHost, // Migration to hostname-based handled in main.ts
+      loadUserCodexSettings: oldSettings.loadUserClaudeSettings ?? DEFAULT_SETTINGS.loadUserCodexSettings,
       claudeCliPath: oldSettings.claudeCliPath ?? DEFAULT_SETTINGS.claudeCliPath,
-      claudeCliPathsByHost: DEFAULT_SETTINGS.claudeCliPathsByHost,  // Migration to hostname-based handled in main.ts
+      claudeCliPathsByHost: DEFAULT_SETTINGS.claudeCliPathsByHost,
       loadUserClaudeSettings: oldSettings.loadUserClaudeSettings ?? DEFAULT_SETTINGS.loadUserClaudeSettings,
       enableAutoTitleGeneration: oldSettings.enableAutoTitleGeneration ?? DEFAULT_SETTINGS.enableAutoTitleGeneration,
       titleGenerationModel: oldSettings.titleGenerationModel ?? DEFAULT_SETTINGS.titleGenerationModel,
@@ -370,7 +531,7 @@ export class StorageService {
   }
 
   async ensureDirectories(): Promise<void> {
-    await this.adapter.ensureFolder(CLAUDE_PATH);
+    await this.adapter.ensureFolder(CODEXIAN_PATH);
     await this.adapter.ensureFolder(COMMANDS_PATH);
     await this.adapter.ensureFolder(SKILLS_PATH);
     await this.adapter.ensureFolder(SESSIONS_PATH);

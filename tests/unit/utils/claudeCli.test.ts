@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 
 import { ClaudeCliResolver, resolveClaudeCliPath } from '@/utils/claudeCli';
-import { findClaudeCLIPath } from '@/utils/path';
+import { findCodexCLIPath } from '@/utils/path';
 
 jest.mock('fs');
 jest.mock('os');
@@ -11,12 +11,13 @@ jest.mock('@/utils/path', () => {
   return {
     ...actual,
     findClaudeCLIPath: jest.fn(),
+    findCodexCLIPath: jest.fn(),
   };
 });
 
 const mockedExists = fs.existsSync as jest.Mock;
 const mockedStat = fs.statSync as jest.Mock;
-const mockedFind = findClaudeCLIPath as jest.Mock;
+const mockedFind = findCodexCLIPath as jest.Mock;
 const mockedHostname = os.hostname as jest.Mock;
 
 describe('ClaudeCliResolver', () => {

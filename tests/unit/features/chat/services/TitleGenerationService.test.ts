@@ -128,10 +128,10 @@ describe('TitleGenerationService', () => {
       expect(options?.model).toBe('sonnet');
     });
 
-    it('should use ANTHROPIC_DEFAULT_HAIKU_MODEL when setting is empty', async () => {
+    it('should use CODEX_MODEL when setting is empty', async () => {
       mockPlugin.settings.titleGenerationModel = '';
       mockPlugin.getActiveEnvironmentVariables.mockReturnValue(
-        'ANTHROPIC_DEFAULT_HAIKU_MODEL=custom-haiku'
+        'CODEX_MODEL=custom-codex-model'
       );
 
       setMockMessages([
@@ -149,10 +149,10 @@ describe('TitleGenerationService', () => {
       await service.generateTitle('conv-123', 'test', callback);
 
       const options = getLastOptions();
-      expect(options?.model).toBe('custom-haiku');
+      expect(options?.model).toBe('custom-codex-model');
     });
 
-    it('should fallback to claude-haiku-4-5 model', async () => {
+    it('should fallback to gpt-5-codex model', async () => {
       setMockMessages([
         { type: 'system', subtype: 'init', session_id: 'test-session' },
         {
@@ -168,7 +168,7 @@ describe('TitleGenerationService', () => {
       await service.generateTitle('conv-123', 'test', callback);
 
       const options = getLastOptions();
-      expect(options?.model).toBe('claude-haiku-4-5');
+      expect(options?.model).toBe('gpt-5-codex');
     });
 
     it('should strip surrounding quotes from title', async () => {
@@ -276,7 +276,7 @@ describe('TitleGenerationService', () => {
 
       expect(callback).toHaveBeenCalledWith('conv-123', {
         success: false,
-        error: 'Claude CLI not found',
+        error: 'Codex CLI not found',
       });
     });
 

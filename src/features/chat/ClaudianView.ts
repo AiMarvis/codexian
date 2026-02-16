@@ -70,7 +70,7 @@ export class ClaudianView extends ItemView {
   }
 
   getDisplayText(): string {
-    return 'Claudian';
+    return 'Codexian';
   }
 
   getIcon(): string {
@@ -216,7 +216,7 @@ export class ClaudianView extends ItemView {
     this.logoEl.appendChild(svg);
 
     // Title text (hidden in header mode when 2+ tabs)
-    this.titleTextEl = this.titleSlotEl.createEl('h4', { text: 'Claudian', cls: 'claudian-title-text' });
+    this.titleTextEl = this.titleSlotEl.createEl('h4', { text: 'Codexian', cls: 'claudian-title-text' });
 
     // Header actions container (for header mode - initially hidden)
     this.headerActionsEl = header.createDiv({ cls: 'claudian-header-actions claudian-header-actions-slot' });

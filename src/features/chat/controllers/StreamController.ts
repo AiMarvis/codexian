@@ -247,7 +247,7 @@ export class StreamController {
       }
     }
 
-    // Track Write to ~/.claude/plans/ for plan mode (used by approve-new-session)
+    // Track Write to ~/.codex/plans/ (and legacy ~/.claude/plans/) for plan mode.
     if (chunk.name === TOOL_WRITE) {
       this.capturePlanFilePath(chunk.input);
     }
@@ -264,7 +264,11 @@ export class StreamController {
 
   private capturePlanFilePath(input: Record<string, unknown>): void {
     const filePath = input.file_path as string | undefined;
-    if (filePath && filePath.replace(/\\/g, '/').includes('/.claude/plans/')) {
+    if (!filePath) {
+      return;
+    }
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    if (normalizedPath.includes('/.codex/plans/') || normalizedPath.includes('/.claude/plans/')) {
       this.deps.state.planFilePath = filePath;
     }
   }

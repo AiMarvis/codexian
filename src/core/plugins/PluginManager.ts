@@ -13,8 +13,14 @@ import * as path from 'path';
 import type { CCSettingsStorage } from '../storage/CCSettingsStorage';
 import type { ClaudianPlugin, InstalledPluginEntry, InstalledPluginsFile, PluginScope } from '../types';
 
-const INSTALLED_PLUGINS_PATH = path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json');
-const GLOBAL_SETTINGS_PATH = path.join(os.homedir(), '.claude', 'settings.json');
+const INSTALLED_PLUGINS_PATHS = [
+  path.join(os.homedir(), '.codex', 'plugins', 'installed_plugins.json'),
+  path.join(os.homedir(), '.claude', 'plugins', 'installed_plugins.json'),
+];
+const GLOBAL_SETTINGS_PATHS = [
+  path.join(os.homedir(), '.codex', 'config.json'),
+  path.join(os.homedir(), '.claude', 'settings.json'),
+];
 
 interface SettingsFile {
   enabledPlugins?: Record<string, boolean>;
@@ -30,6 +36,16 @@ function readJsonFile<T>(filePath: string): T | null {
   } catch {
     return null;
   }
+}
+
+function readFirstExistingJson<T>(paths: string[]): T | null {
+  for (const candidate of paths) {
+    const parsed = readJsonFile<T>(candidate);
+    if (parsed) {
+      return parsed;
+    }
+  }
+  return null;
 }
 
 function normalizePathForComparison(p: string): string {
@@ -79,8 +95,8 @@ export class PluginManager {
   }
 
   async loadPlugins(): Promise<void> {
-    const installedPlugins = readJsonFile<InstalledPluginsFile>(INSTALLED_PLUGINS_PATH);
-    const globalSettings = readJsonFile<SettingsFile>(GLOBAL_SETTINGS_PATH);
+    const installedPlugins = readFirstExistingJson<InstalledPluginsFile>(INSTALLED_PLUGINS_PATHS);
+    const globalSettings = readFirstExistingJson<SettingsFile>(GLOBAL_SETTINGS_PATHS);
     const projectSettings = await this.loadProjectSettings();
 
     const globalEnabled = globalSettings?.enabledPlugins ?? {};
@@ -120,8 +136,12 @@ export class PluginManager {
   }
 
   private async loadProjectSettings(): Promise<SettingsFile | null> {
-    const projectSettingsPath = path.join(this.vaultPath, '.claude', 'settings.json');
-    return readJsonFile(projectSettingsPath);
+    const projectSettingsPath = path.join(this.vaultPath, '.codexian', 'cc-settings.json');
+    const projectSettings = readJsonFile<SettingsFile>(projectSettingsPath);
+    if (projectSettings) {
+      return projectSettings;
+    }
+    return readJsonFile<SettingsFile>(path.join(this.vaultPath, '.claude', 'settings.json'));
   }
 
   getPlugins(): ClaudianPlugin[] {

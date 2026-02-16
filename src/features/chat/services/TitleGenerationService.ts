@@ -1,5 +1,5 @@
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
-import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
+import type { Options, SDKMessage } from '@/core/sdk/codexAgentSdkCompat';
+import { query as agentQuery } from '@/core/sdk/codexAgentSdkCompat';
 
 import { TITLE_GENERATION_SYSTEM_PROMPT } from '../../../core/prompts/titleGeneration';
 import type ClaudianPlugin from '../../../main';
@@ -49,7 +49,7 @@ export class TitleGenerationService {
     if (!resolvedClaudePath) {
       await this.safeCallback(callback, conversationId, {
         success: false,
-        error: 'Claude CLI not found',
+        error: 'Codex CLI not found',
       });
       return;
     }
@@ -65,12 +65,13 @@ export class TitleGenerationService {
 
     // Get the appropriate model with fallback chain:
     // 1. User's titleGenerationModel setting (if set)
-    // 2. ANTHROPIC_DEFAULT_HAIKU_MODEL env var
-    // 3. claude-haiku-4-5 default
+    // 2. CODEX_MODEL / OPENAI_MODEL env var
+    // 3. gpt-5-codex default
     const titleModel =
       this.plugin.settings.titleGenerationModel ||
-      envVars.ANTHROPIC_DEFAULT_HAIKU_MODEL ||
-      'claude-haiku-4-5';
+      envVars.CODEX_MODEL ||
+      envVars.OPENAI_MODEL ||
+      'gpt-5-codex';
 
     // Cancel any existing generation for this conversation
     const existingController = this.activeGenerations.get(conversationId);
@@ -106,7 +107,7 @@ Generate a title for this conversation:`;
       tools: [], // No tools needed for title generation
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
-      settingSources: this.plugin.settings.loadUserClaudeSettings
+      settingSources: (this.plugin.settings.loadUserCodexSettings ?? this.plugin.settings.loadUserClaudeSettings)
         ? ['user', 'project']
         : ['project'],
       persistSession: false, // Don't save title generation queries to session history
@@ -164,9 +165,7 @@ Generate a title for this conversation:`;
   }
 
   /** Extracts text content from SDK message. */
-  private extractTextFromMessage(
-    message: { type: string; message?: { content?: Array<{ type: string; text?: string }> } }
-  ): string {
+  private extractTextFromMessage(message: SDKMessage): string {
     if (message.type !== 'assistant' || !message.message?.content) {
       return '';
     }

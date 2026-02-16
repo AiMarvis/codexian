@@ -1,6 +1,5 @@
-import type { SDKUserMessage } from '@anthropic-ai/claude-agent-sdk';
-
 import { MessageChannel } from '@/core/agent/MessageChannel';
+import type { SDKUserMessage } from '@/core/sdk/codexAgentSdkCompat';
 
 // Helper to create SDK-format text user message
 function createTextUserMessage(content: string): SDKUserMessage {

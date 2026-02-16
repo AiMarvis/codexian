@@ -1,5 +1,5 @@
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
-import { query as agentQuery } from '@anthropic-ai/claude-agent-sdk';
+import type { Options, SDKMessage } from '@/core/sdk/codexAgentSdkCompat';
+import { query as agentQuery } from '@/core/sdk/codexAgentSdkCompat';
 
 import { buildRefineSystemPrompt } from '../../../core/prompts/instructionRefine';
 import { type InstructionRefineResult, THINKING_BUDGETS } from '../../../core/types';
@@ -66,7 +66,7 @@ export class InstructionRefineService {
 
     const resolvedClaudePath = this.plugin.getResolvedClaudeCliPath();
     if (!resolvedClaudePath) {
-      return { success: false, error: 'Claude CLI not found. Please install Claude Code CLI.' };
+      return { success: false, error: 'Codex CLI not found. Please install @openai/codex.' };
     }
 
     this.abortController = new AbortController();
@@ -93,7 +93,7 @@ export class InstructionRefineService {
       tools: [], // No tools needed for instruction refinement
       permissionMode: 'bypassPermissions',
       allowDangerouslySkipPermissions: true,
-      settingSources: this.plugin.settings.loadUserClaudeSettings
+      settingSources: (this.plugin.settings.loadUserCodexSettings ?? this.plugin.settings.loadUserClaudeSettings)
         ? ['user', 'project']
         : ['project'],
     };
@@ -159,7 +159,7 @@ export class InstructionRefineService {
   }
 
   /** Extracts text content from SDK message. */
-  private extractTextFromMessage(message: { type: string; message?: { content?: Array<{ type: string; text?: string }> } }): string {
+  private extractTextFromMessage(message: SDKMessage): string {
     if (message.type !== 'assistant' || !message.message?.content) {
       return '';
     }

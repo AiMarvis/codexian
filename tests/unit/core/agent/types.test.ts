@@ -1,6 +1,5 @@
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
-
 import { computeSystemPromptKey, createResponseHandler, isTurnCompleteMessage } from '@/core/agent/types';
+import type { SDKMessage } from '@/core/sdk/codexAgentSdkCompat';
 
 describe('isTurnCompleteMessage', () => {
   it('returns true for result message', () => {

@@ -412,7 +412,7 @@ describe('InlineEditService', () => {
       });
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain('Claude CLI not found');
+      expect(result.error).toContain('Codex CLI not found');
     });
 
     it('should use restricted read-only tools', async () => {
@@ -929,7 +929,7 @@ describe('InlineEditService', () => {
 
     it('should surface SDK query errors', async () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const sdk = require('@anthropic-ai/claude-agent-sdk');
+      const sdk = require('@/core/sdk/codexAgentSdkCompat');
       const spy = jest.spyOn(sdk, 'query').mockImplementation(() => {
         throw new Error('boom');
       });

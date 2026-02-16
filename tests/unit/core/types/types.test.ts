@@ -80,8 +80,8 @@ describe('types.ts', () => {
       expect(DEFAULT_SETTINGS.envSnippets).toEqual([]);
     });
 
-    it('should have lastClaudeModel set to haiku by default', () => {
-      expect(DEFAULT_SETTINGS.lastClaudeModel).toBe('haiku');
+    it('should have lastClaudeModel set to gpt-5-codex by default', () => {
+      expect(DEFAULT_SETTINGS.lastClaudeModel).toBe('gpt-5-codex');
     });
 
     it('should have lastCustomModel as empty string by default', () => {
@@ -788,9 +788,9 @@ describe('types.ts', () => {
         expect(getContextWindowSize('haiku')).toBe(CONTEXT_WINDOW_STANDARD);
       });
 
-      it('should return 1M context window for sonnet when enabled', () => {
-        expect(getContextWindowSize('sonnet', true)).toBe(CONTEXT_WINDOW_1M);
-        expect(getContextWindowSize('claude-sonnet-4-5', true)).toBe(CONTEXT_WINDOW_1M);
+      it('should return 1M context window for gpt-5 models when enabled', () => {
+        expect(getContextWindowSize('gpt-5-codex', true)).toBe(CONTEXT_WINDOW_1M);
+        expect(getContextWindowSize('gpt-5', true)).toBe(CONTEXT_WINDOW_1M);
       });
 
       it('should return standard context for non-sonnet models even with 1M enabled', () => {
@@ -847,9 +847,9 @@ describe('types.ts', () => {
           expect(getContextWindowSize('custom-model', false, customLimits)).toBe(CONTEXT_WINDOW_STANDARD);
         });
 
-        it('should fall back to 1M for invalid sonnet custom limit when 1M enabled', () => {
-          const customLimits = { 'sonnet': NaN };
-          expect(getContextWindowSize('sonnet', true, customLimits)).toBe(CONTEXT_WINDOW_1M);
+        it('should fall back to 1M for invalid gpt-5 custom limit when 1M enabled', () => {
+          const customLimits = { 'gpt-5-codex': NaN };
+          expect(getContextWindowSize('gpt-5-codex', true, customLimits)).toBe(CONTEXT_WINDOW_1M);
         });
 
         it('should accept valid positive custom limit', () => {

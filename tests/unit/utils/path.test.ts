@@ -385,7 +385,7 @@ describe('getPathAccessType', () => {
     expect(getPathAccessType(path.join(os.homedir(), '.claude', 'skills', 'skill'), [], [], vaultPath)).toBe('vault');
     expect(getPathAccessType(path.join(os.homedir(), '.claude', 'plans', 'plan.md'), [], [], vaultPath)).toBe('vault');
     expect(getPathAccessType(path.join(os.homedir(), '.claude', 'mcp.json'), [], [], vaultPath)).toBe('vault');
-    expect(getPathAccessType(path.join(os.homedir(), '.claude', 'claudian-settings.json'), [], [], vaultPath)).toBe('vault');
+    expect(getPathAccessType(path.join(os.homedir(), '.claude', 'cc-settings.json'), [], [], vaultPath)).toBe('vault');
   });
 
   it('returns context (read-only) for unknown ~/.claude paths', () => {
@@ -453,8 +453,8 @@ describe('findClaudeCLIPath', () => {
 
   it('resolves from custom path entries', () => {
     const claudePath = isWindows
-      ? 'C:\\custom\\bin\\claude.exe'
-      : '/custom/bin/claude';
+      ? 'C:\\custom\\bin\\codex.exe'
+      : '/custom/bin/codex';
 
     jest.spyOn(fs, 'existsSync').mockImplementation(
       p => String(p) === claudePath
@@ -473,7 +473,7 @@ describe('findClaudeCLIPath', () => {
   });
 
   it('finds claude from common paths when no custom path provided', () => {
-    const commonPath = path.join(os.homedir(), '.claude', 'local', 'claude');
+    const commonPath = path.join(os.homedir(), '.codex', 'local', 'codex');
 
     jest.spyOn(fs, 'existsSync').mockImplementation(
       p => String(p) === commonPath
@@ -489,7 +489,7 @@ describe('findClaudeCLIPath', () => {
   it('falls back to npm cli.js paths when binary not found', () => {
     const cliJsPath = path.join(
       os.homedir(), '.npm-global', 'lib', 'node_modules',
-      '@anthropic-ai', 'claude-code', 'cli.js'
+      '@openai', 'codex', 'bin', 'codex.js'
     );
 
     jest.spyOn(fs, 'existsSync').mockImplementation(
@@ -504,7 +504,7 @@ describe('findClaudeCLIPath', () => {
   });
 
   it('falls back to PATH environment when common and npm paths fail', () => {
-    const envClaudePath = '/env/specific/bin/claude';
+    const envClaudePath = '/env/specific/bin/codex';
     const originalPath = process.env.PATH;
     process.env.PATH = `/env/specific/bin:${originalPath}`;
 
@@ -523,8 +523,8 @@ describe('findClaudeCLIPath', () => {
     }
   });
 
-  it('returns null for custom path without claude binary on non-Windows', () => {
-    // On non-Windows, custom path resolution only looks for 'claude' binary
+  it('returns null for custom path without codex binary on non-Windows', () => {
+    // On non-Windows, custom path resolution only looks for 'codex' binary
     const customDir = '/custom/tools';
 
     jest.spyOn(fs, 'existsSync').mockReturnValue(false);

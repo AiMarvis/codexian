@@ -6,8 +6,9 @@
  * where the minimal PATH doesn't include Node.js.
  */
 
-import type { SpawnedProcess, SpawnOptions } from '@anthropic-ai/claude-agent-sdk';
 import { spawn } from 'child_process';
+
+import type { SpawnedProcess, SpawnOptions } from '@/core/sdk/codexAgentSdkCompat';
 
 import { findNodeExecutable } from '../../utils/env';
 

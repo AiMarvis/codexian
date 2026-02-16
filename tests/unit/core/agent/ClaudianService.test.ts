@@ -1,9 +1,8 @@
-import * as sdkModule from '@anthropic-ai/claude-agent-sdk';
-
 import { ClaudianService } from '@/core/agent/ClaudianService';
 import { MessageChannel } from '@/core/agent/MessageChannel';
 import { createResponseHandler } from '@/core/agent/types';
 import type { McpServerManager } from '@/core/mcp';
+import * as sdkModule from '@/core/sdk/codexAgentSdkCompat';
 import type ClaudianPlugin from '@/main';
 import * as envUtils from '@/utils/env';
 import * as sessionUtils from '@/utils/session';
@@ -1368,7 +1367,7 @@ describe('ClaudianService', () => {
 
       const chunks = await collectChunks(service.query('hello'));
 
-      expect(chunks).toEqual([{ type: 'error', content: expect.stringContaining('Claude CLI not found') }]);
+      expect(chunks).toEqual([{ type: 'error', content: expect.stringContaining('Codex CLI not found') }]);
     });
 
     it('should yield chunks from cold-start query', async () => {

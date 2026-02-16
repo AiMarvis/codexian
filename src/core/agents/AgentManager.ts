@@ -14,8 +14,11 @@ import type { PluginManager } from '../plugins';
 import type { AgentDefinition } from '../types';
 import { buildAgentFromFrontmatter, parseAgentFile } from './AgentStorage';
 
-const GLOBAL_AGENTS_DIR = path.join(os.homedir(), '.claude', 'agents');
-const VAULT_AGENTS_DIR = '.claude/agents';
+const GLOBAL_AGENTS_DIRS = [
+  path.join(os.homedir(), '.codex', 'agents'),
+  path.join(os.homedir(), '.claude', 'agents'),
+];
+const VAULT_AGENTS_DIRS = ['.codexian/agents', '.claude/agents'];
 const PLUGIN_AGENTS_DIR = 'agents';
 
 // Fallback built-in agent names for before the init message arrives.
@@ -112,11 +115,15 @@ export class AgentManager {
   }
 
   private async loadVaultAgents(): Promise<void> {
-    await this.loadAgentsFromDirectory(path.join(this.vaultPath, VAULT_AGENTS_DIR), 'vault');
+    for (const dir of VAULT_AGENTS_DIRS) {
+      await this.loadAgentsFromDirectory(path.join(this.vaultPath, dir), 'vault');
+    }
   }
 
   private async loadGlobalAgents(): Promise<void> {
-    await this.loadAgentsFromDirectory(GLOBAL_AGENTS_DIR, 'global');
+    for (const dir of GLOBAL_AGENTS_DIRS) {
+      await this.loadAgentsFromDirectory(dir, 'global');
+    }
   }
 
   private async loadAgentsFromDirectory(

@@ -42,6 +42,9 @@ export const CLAUDIAN_ONLY_FIELDS = new Set([
   'keyboardNavigation',
 
   // CLI paths
+  'codexCliPath',
+  'codexCliPathsByHost',
+  'loadUserCodexSettings',
   'claudeCliPath',
   'claudeCliPaths',
   'loadUserClaudeSettings',
@@ -75,6 +78,9 @@ export const MIGRATABLE_CLAUDIAN_FIELDS = new Set([
   'envSnippets',
   'env', // Converted to environmentVariables
   'keyboardNavigation',
+  'codexCliPath',
+  'codexCliPathsByHost',
+  'loadUserCodexSettings',
   'claudeCliPath',
   'claudeCliPaths',
   'loadUserClaudeSettings',

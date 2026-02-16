@@ -740,7 +740,7 @@ describe('transformSDKMessage', () => {
       expect(usageResults).toHaveLength(0);
     });
 
-    it('uses 1M context window when is1MEnabled is true for sonnet', () => {
+    it('uses 1M context window when is1MEnabled is true for gpt-5 models', () => {
       const message: SDKMessage = {
         type: 'assistant',
         parent_tool_use_id: null,
@@ -755,7 +755,7 @@ describe('transformSDKMessage', () => {
         } as any,
       };
 
-      const results = [...transformSDKMessage(message, { intendedModel: 'sonnet', is1MEnabled: true })];
+      const results = [...transformSDKMessage(message, { intendedModel: 'gpt-5-codex', is1MEnabled: true })];
 
       const usageResults = results.filter(r => r.type === 'usage');
       expect(usageResults).toHaveLength(1);

@@ -39,7 +39,7 @@ function openHotkeySettings(app: App): void {
       // Handle both old and new Obsidian versions
       const searchEl = tab.searchInputEl ?? tab.searchComponent?.inputEl;
       if (searchEl) {
-        searchEl.value = 'Claudian';
+        searchEl.value = 'Codexian';
         tab.updateHotkeyVisibility?.();
       }
     }
@@ -334,7 +334,7 @@ export class ClaudianSettingTab extends PluginSettingTab {
     descP.appendText(t('settings.slashCommands.desc') + ' ');
     descP.createEl('a', {
       text: 'Learn more',
-      href: 'https://code.claude.com/docs/en/skills',
+      href: 'https://developers.openai.com/codex/skills',
     });
 
     const slashCommandsContainer = containerEl.createDiv({ cls: 'claudian-slash-commands-container' });
@@ -399,8 +399,9 @@ export class ClaudianSettingTab extends PluginSettingTab {
       .setDesc(t('settings.loadUserSettings.desc'))
       .addToggle((toggle) =>
         toggle
-          .setValue(this.plugin.settings.loadUserClaudeSettings)
+          .setValue(this.plugin.settings.loadUserCodexSettings ?? this.plugin.settings.loadUserClaudeSettings)
           .onChange(async (value) => {
+            this.plugin.settings.loadUserCodexSettings = value;
             this.plugin.settings.loadUserClaudeSettings = value;
             await this.plugin.saveSettings();
           })
@@ -636,10 +637,12 @@ export class ClaudianSettingTab extends PluginSettingTab {
 
     cliPathSetting.addText((text) => {
       const placeholder = process.platform === 'win32'
-        ? 'D:\\nodejs\\node_global\\node_modules\\@anthropic-ai\\claude-code\\cli.js'
-        : '/usr/local/lib/node_modules/@anthropic-ai/claude-code/cli.js';
+        ? 'C:\\Users\\you\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\bin\\codex.js'
+        : '/usr/local/lib/node_modules/@openai/codex/bin/codex.js';
 
-      const currentValue = this.plugin.settings.claudeCliPathsByHost?.[hostnameKey] || '';
+      const currentValue = this.plugin.settings.codexCliPathsByHost?.[hostnameKey]
+        || this.plugin.settings.claudeCliPathsByHost?.[hostnameKey]
+        || '';
 
       text
         .setPlaceholder(placeholder)
@@ -656,10 +659,11 @@ export class ClaudianSettingTab extends PluginSettingTab {
           }
 
           const trimmed = value.trim();
-          if (!this.plugin.settings.claudeCliPathsByHost) {
-            this.plugin.settings.claudeCliPathsByHost = {};
+          if (!this.plugin.settings.codexCliPathsByHost) {
+            this.plugin.settings.codexCliPathsByHost = {};
           }
-          this.plugin.settings.claudeCliPathsByHost[hostnameKey] = trimmed;
+          this.plugin.settings.codexCliPathsByHost[hostnameKey] = trimmed;
+          this.plugin.settings.claudeCliPathsByHost = this.plugin.settings.codexCliPathsByHost;
           await this.plugin.saveSettings();
           this.plugin.cliResolver?.reset();
           const view = this.plugin.getView();

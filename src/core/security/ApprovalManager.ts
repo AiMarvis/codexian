@@ -1,6 +1,6 @@
 /** Permission utilities for tool action approval. */
 
-import type { PermissionUpdate, PermissionUpdateDestination } from '@anthropic-ai/claude-agent-sdk';
+import type { PermissionUpdate, PermissionUpdateDestination } from '@/core/sdk/codexAgentSdkCompat';
 
 import {
   TOOL_BASH,

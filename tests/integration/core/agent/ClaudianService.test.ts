@@ -309,9 +309,9 @@ describe('ClaudianService', () => {
       (fs.statSync as jest.Mock).mockReset();
     });
 
-    it('should find claude CLI in ~/.claude/local/claude', async () => {
+    it('should find codex CLI in ~/.codex/local/codex', async () => {
       const homeDir = os.homedir();
-      const expectedPath = path.join(homeDir, '.claude', 'local', 'claude');
+      const expectedPath = path.join(homeDir, '.codex', 'local', 'codex');
 
       (fs.existsSync as jest.Mock).mockImplementation((p: string) => {
         return p === expectedPath;
@@ -329,12 +329,12 @@ describe('ClaudianService', () => {
       }
 
       const errorChunk = chunks.find(
-        (c) => c.type === 'error' && c.content.includes('Claude CLI not found')
+        (c) => c.type === 'error' && c.content.includes('Codex CLI not found')
       );
       expect(errorChunk).toBeUndefined();
     });
 
-    it('should return error when claude CLI not found', async () => {
+    it('should return error when codex CLI not found', async () => {
       (fs.existsSync as jest.Mock).mockReturnValue(false);
 
       const chunks: any[] = [];
@@ -344,7 +344,7 @@ describe('ClaudianService', () => {
 
       const errorChunk = chunks.find((c) => c.type === 'error');
       expect(errorChunk).toBeDefined();
-      expect(errorChunk?.content).toContain('Claude CLI not found');
+      expect(errorChunk?.content).toContain('Codex CLI not found');
     });
 
     it('should use custom CLI path when valid file is specified', async () => {
@@ -373,7 +373,7 @@ describe('ClaudianService', () => {
       }
 
       const errorChunk = chunks.find(
-        (c) => c.type === 'error' && c.content.includes('Claude CLI not found')
+        (c) => c.type === 'error' && c.content.includes('Codex CLI not found')
       );
       expect(errorChunk).toBeUndefined();
     });
@@ -391,7 +391,7 @@ describe('ClaudianService', () => {
       service = new ClaudianService(mockPlugin, createMockMcpManager());
 
       const homeDir = os.homedir();
-      const autoDetectedPath = path.join(homeDir, '.claude', 'local', 'claude');
+      const autoDetectedPath = path.join(homeDir, '.codex', 'local', 'codex');
 
       (fs.existsSync as jest.Mock).mockImplementation((p: string) =>
         p === customPath || p === autoDetectedPath
@@ -427,7 +427,7 @@ describe('ClaudianService', () => {
       service = new ClaudianService(mockPlugin, createMockMcpManager());
 
       const homeDir = os.homedir();
-      const autoDetectedPath = path.join(homeDir, '.claude', 'local', 'claude');
+      const autoDetectedPath = path.join(homeDir, '.codex', 'local', 'codex');
 
       (fs.existsSync as jest.Mock).mockImplementation((p: string) =>
         p === autoDetectedPath // Custom path does not exist
@@ -463,7 +463,7 @@ describe('ClaudianService', () => {
       service = new ClaudianService(mockPlugin, createMockMcpManager());
 
       const homeDir = os.homedir();
-      const autoDetectedPath = path.join(homeDir, '.claude', 'local', 'claude');
+      const autoDetectedPath = path.join(homeDir, '.codex', 'local', 'codex');
 
       (fs.existsSync as jest.Mock).mockImplementation((p: string) =>
         p === customPath || p === autoDetectedPath
@@ -487,7 +487,7 @@ describe('ClaudianService', () => {
       }
 
       const errorChunk = chunks.find(
-        (c) => c.type === 'error' && c.content.includes('Claude CLI not found')
+        (c) => c.type === 'error' && c.content.includes('Codex CLI not found')
       );
       expect(errorChunk).toBeUndefined();
 
@@ -2095,7 +2095,7 @@ describe('ClaudianService', () => {
 
     it('yields error when SDK query throws inside queryViaSDK', async () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const sdk = require('@anthropic-ai/claude-agent-sdk');
+      const sdk = require('@/core/sdk/codexAgentSdkCompat');
       const spy = jest.spyOn(sdk, 'query').mockImplementation(() => { throw new Error('boom'); });
 
       const chunks: any[] = [];
@@ -2341,7 +2341,7 @@ describe('ClaudianService', () => {
 
     it('re-enqueues pending message after crash recovery restart', async () => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const sdk = require('@anthropic-ai/claude-agent-sdk');
+      const sdk = require('@/core/sdk/codexAgentSdkCompat');
 
       let callCount = 0;
       let firstPrompt: any = null;

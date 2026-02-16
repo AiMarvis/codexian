@@ -17,7 +17,7 @@ export class PluginSettingsManager {
     this.containerEl.empty();
 
     const headerEl = this.containerEl.createDiv({ cls: 'claudian-plugin-header' });
-    headerEl.createSpan({ text: 'Claude Code Plugins', cls: 'claudian-plugin-label' });
+    headerEl.createSpan({ text: 'Codex Apps', cls: 'claudian-plugin-label' });
 
     const refreshBtn = headerEl.createEl('button', {
       cls: 'claudian-settings-action-btn',
@@ -30,7 +30,7 @@ export class PluginSettingsManager {
 
     if (plugins.length === 0) {
       const emptyEl = this.containerEl.createDiv({ cls: 'claudian-plugin-empty' });
-      emptyEl.setText('No Claude Code plugins found. Enable plugins via the Claude CLI.');
+      emptyEl.setText('No Codex apps found. Configure apps via Codex CLI.');
       return;
     }
 

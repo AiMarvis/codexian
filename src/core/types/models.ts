@@ -2,16 +2,21 @@
  * Model type definitions and constants.
  */
 
-import type { SdkBeta } from '@anthropic-ai/claude-agent-sdk';
+import type { SdkBeta } from '@/core/sdk/codexAgentSdkCompat';
 
 /** Model identifier (string to support custom models via environment variables). */
-export type ClaudeModel = string;
+export type CodexModel = string;
+/** @deprecated Use CodexModel. Kept for compatibility with existing internal types/tests. */
+export type ClaudeModel = CodexModel;
 
-export const DEFAULT_CLAUDE_MODELS: { value: ClaudeModel; label: string; description: string }[] = [
-  { value: 'haiku', label: 'Haiku', description: 'Fast and efficient' },
-  { value: 'sonnet', label: 'Sonnet', description: 'Balanced performance' },
-  { value: 'opus', label: 'Opus', description: 'Most capable' },
+export const DEFAULT_CODEX_MODELS: { value: CodexModel; label: string; description: string }[] = [
+  { value: 'gpt-5-codex', label: 'GPT-5 Codex', description: 'Best for coding tasks' },
+  { value: 'gpt-5', label: 'GPT-5', description: 'General high-capability model' },
+  { value: 'o4-mini', label: 'o4-mini', description: 'Fast and lightweight' },
 ];
+
+/** @deprecated Use DEFAULT_CODEX_MODELS. */
+export const DEFAULT_CLAUDE_MODELS = DEFAULT_CODEX_MODELS;
 
 export const BETA_1M_CONTEXT: SdkBeta = 'context-1m-2025-08-07';
 
@@ -54,9 +59,9 @@ export const THINKING_BUDGETS: { value: ThinkingBudget; label: string; tokens: n
 
 /** Default thinking budget per model tier. */
 export const DEFAULT_THINKING_BUDGET: Record<string, ThinkingBudget> = {
-  'haiku': 'off',
-  'sonnet': 'low',
-  'opus': 'medium',
+  'o4-mini': 'off',
+  'gpt-5-codex': 'medium',
+  'gpt-5': 'low',
 };
 
 export const CONTEXT_WINDOW_STANDARD = 200_000;
@@ -74,8 +79,8 @@ export function getContextWindowSize(
     }
   }
 
-  // 1M context only applies to sonnet
-  if (is1MEnabled && model.includes('sonnet')) {
+  // Keep compatibility toggle for installations that still expose a 1M option.
+  if (is1MEnabled && model.includes('gpt-5')) {
     return CONTEXT_WINDOW_1M;
   }
   return CONTEXT_WINDOW_STANDARD;

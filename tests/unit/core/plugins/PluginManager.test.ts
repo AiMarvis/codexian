@@ -24,9 +24,9 @@ function createMockCCSettingsStorage() {
   } as any;
 }
 
-const installedPluginsPath = path.join(homeDir, '.claude', 'plugins', 'installed_plugins.json');
-const globalSettingsPath = path.join(homeDir, '.claude', 'settings.json');
-const projectSettingsPath = path.join(vaultPath, '.claude', 'settings.json');
+const installedPluginsPath = path.join(homeDir, '.codex', 'plugins', 'installed_plugins.json');
+const globalSettingsPath = path.join(homeDir, '.codex', 'config.json');
+const projectSettingsPath = path.join(vaultPath, '.codexian', 'cc-settings.json');
 
 describe('PluginManager', () => {
   beforeEach(() => {

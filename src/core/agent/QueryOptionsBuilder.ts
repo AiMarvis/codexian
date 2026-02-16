@@ -12,8 +12,9 @@
 
 import type {
   CanUseTool,
+  McpServerConfig,
   Options,
-} from '@anthropic-ai/claude-agent-sdk';
+} from '@/core/sdk/codexAgentSdkCompat';
 
 import type { McpServerManager } from '../mcp';
 import type { PluginManager } from '../plugins';
@@ -171,7 +172,7 @@ export class QueryOptionsBuilder {
       pluginsKey,
       externalContextPaths: externalContextPaths || [],
       allowedExportPaths: ctx.settings.allowedExportPaths,
-      settingSources: ctx.settings.loadUserClaudeSettings ? 'user,project' : 'project',
+      settingSources: (ctx.settings.loadUserCodexSettings ?? ctx.settings.loadUserClaudeSettings) ? 'user,project' : 'project',
       claudeCliPath: ctx.cliPath,
       show1MModel: ctx.settings.show1MModel,
       enableChrome: ctx.settings.enableChrome,
@@ -197,7 +198,7 @@ export class QueryOptionsBuilder {
       model: resolved.model,
       abortController: ctx.abortController,
       pathToClaudeCodeExecutable: ctx.cliPath,
-      settingSources: ctx.settings.loadUserClaudeSettings
+      settingSources: (ctx.settings.loadUserCodexSettings ?? ctx.settings.loadUserClaudeSettings)
         ? ['user', 'project']
         : ['project'],
       env: {
@@ -266,7 +267,7 @@ export class QueryOptionsBuilder {
       abortController: ctx.abortController,
       pathToClaudeCodeExecutable: ctx.cliPath,
       // User settings may contain permission rules that bypass Claudian's permission system
-      settingSources: ctx.settings.loadUserClaudeSettings
+      settingSources: (ctx.settings.loadUserCodexSettings ?? ctx.settings.loadUserClaudeSettings)
         ? ['user', 'project']
         : ['project'],
       env: {
@@ -289,7 +290,7 @@ export class QueryOptionsBuilder {
     const mcpServers = ctx.mcpManager.getActiveServers(combinedMentions);
 
     if (Object.keys(mcpServers).length > 0) {
-      options.mcpServers = mcpServers;
+      options.mcpServers = mcpServers as Record<string, McpServerConfig>;
     }
 
     const disallowedMcpTools = ctx.mcpManager.getDisallowedMcpTools(combinedMentions);
