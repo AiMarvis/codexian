@@ -1,6 +1,6 @@
 {
   "name": "codexian",
-  "version": "1.3.65",
+  "version": "1.3.66",
   "description": "Codexian - Codex embedded in Obsidian sidebar",
   "main": "main.js",
   "scripts": {
