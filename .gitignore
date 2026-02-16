@@ -1,11 +1,10 @@
 # Build output
-main.js
-styles.css
 *.js.map
 dist/
 build/
 
 # Dependencies
+node_modules
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -92,3 +91,8 @@ dev
 
 .claude/
 .codex/
+
+# Google Drive nosync (prevent cloud sync for heavy dirs)
+node_modules.nosync/
+.git.nosync/
+*.nosync
