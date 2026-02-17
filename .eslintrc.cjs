@@ -1,7 +1,7 @@
 /** @type {import('eslint').Linter.Config} */
 module.exports = {
   root: true,
-  ignorePatterns: ['dist/', 'node_modules/', 'coverage/', 'main.js'],
+  ignorePatterns: ['dist/', 'node_modules/', 'node_modules.nosync/', 'coverage/', 'main.js'],
   env: {
     browser: true,
     node: true,

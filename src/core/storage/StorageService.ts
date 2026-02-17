@@ -18,8 +18,8 @@ import type { App, Plugin } from 'obsidian';
 import { Notice } from 'obsidian';
 
 import type {
-  CCSettings,
   CCPermissions,
+  CCSettings,
   ClaudeModel,
   Conversation,
   LegacyPermission,
@@ -46,13 +46,13 @@ import {
   normalizeBlockedCommands,
   type StoredClaudianSettings,
 } from './ClaudianSettingsStorage';
+import { runLegacyPluginIdMigrationOnce } from './LegacyPluginIdMigration';
 import { MCP_CONFIG_PATH, McpStorage } from './McpStorage';
 import {
   CLAUDIAN_ONLY_FIELDS,
   convertEnvObjectToString,
   mergeEnvironmentVariables,
 } from './migrationConstants';
-import { runLegacyPluginIdMigrationOnce } from './LegacyPluginIdMigration';
 import { SESSIONS_PATH, SessionStorage } from './SessionStorage';
 import { SKILLS_PATH, SkillStorage } from './SkillStorage';
 import { COMMANDS_PATH, SlashCommandStorage } from './SlashCommandStorage';
