@@ -287,6 +287,50 @@ describe('ClaudianPlugin', () => {
       expect(plugin.settings.model).toBe('custom-model');
       expect(saveSpy).toHaveBeenCalled();
     });
+
+    it('should normalize unsupported model to default when env hash is unchanged', async () => {
+      mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
+        return path === '.codexian/settings.json';
+      });
+      mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
+        if (path === '.codexian/settings.json') {
+          return JSON.stringify({
+            model: 'opus',
+            environmentVariables: '',
+            lastEnvHash: '',
+          });
+        }
+        return '';
+      });
+
+      const saveSpy = jest.spyOn(plugin, 'saveSettings');
+      await plugin.loadSettings();
+
+      expect(plugin.settings.model).toBe(DEFAULT_SETTINGS.model);
+      expect(saveSpy).toHaveBeenCalled();
+    });
+
+    it('should normalize unsupported model to preferred custom model from environment', async () => {
+      mockApp.vault.adapter.exists.mockImplementation(async (path: string) => {
+        return path === '.codexian/settings.json';
+      });
+      mockApp.vault.adapter.read.mockImplementation(async (path: string) => {
+        if (path === '.codexian/settings.json') {
+          return JSON.stringify({
+            model: 'opus',
+            environmentVariables: 'ANTHROPIC_MODEL=custom-model',
+            lastEnvHash: 'ANTHROPIC_MODEL=custom-model',
+          });
+        }
+        return '';
+      });
+
+      const saveSpy = jest.spyOn(plugin, 'saveSettings');
+      await plugin.loadSettings();
+
+      expect(plugin.settings.model).toBe('custom-model');
+      expect(saveSpy).toHaveBeenCalled();
+    });
   });
 
   describe('saveSettings', () => {

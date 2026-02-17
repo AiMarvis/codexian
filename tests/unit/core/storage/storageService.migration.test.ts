@@ -1,6 +1,7 @@
 import type { Plugin } from 'obsidian';
 
 import { StorageService } from '@/core/storage';
+import { CLAUDIAN_PLUGIN_ID_MIGRATION_MARKER } from '@/core/storage/LegacyPluginIdMigration';
 import { DEFAULT_SETTINGS, type SlashCommand } from '@/core/types';
 
 type AdapterOptions = {
@@ -97,6 +98,83 @@ function createMockPlugin(options: {
 }
 
 describe('StorageService migration', () => {
+  it('migrates claudian plugin id and hotkeys to codexian and writes migration marker', async () => {
+    const { plugin, files } = createMockPlugin({
+      dataJson: {},
+      initialFiles: {
+        '.obsidian/community-plugins.json': JSON.stringify(['obsidian42-brat', 'claudian', 'calendar']),
+        '.obsidian/hotkeys.json': JSON.stringify({
+          'claudian:open-view': [{ modifiers: ['Mod'], key: 'N' }],
+        }),
+      },
+    });
+
+    const storage = new StorageService(plugin);
+    await storage.initialize();
+
+    const communityPlugins = JSON.parse(
+      files.get('.obsidian/community-plugins.json') || '[]'
+    ) as unknown[];
+    expect(communityPlugins).toEqual(['obsidian42-brat', 'codexian', 'calendar']);
+
+    const hotkeys = JSON.parse(files.get('.obsidian/hotkeys.json') || '{}') as Record<string, unknown>;
+    expect(hotkeys['claudian:open-view']).toBeUndefined();
+    expect(hotkeys['codexian:open-view']).toEqual([{ modifiers: ['Mod'], key: 'N' }]);
+    expect(files.has(CLAUDIAN_PLUGIN_ID_MIGRATION_MARKER)).toBe(true);
+  });
+
+  it('deduplicates codexian plugin id and keeps existing codexian hotkeys when migrating', async () => {
+    const existingHotkey = [{ modifiers: ['Mod', 'Shift'], key: 'C' }];
+    const { plugin, files } = createMockPlugin({
+      dataJson: {},
+      initialFiles: {
+        '.obsidian/community-plugins.json': JSON.stringify(['codexian', 'claudian']),
+        '.obsidian/hotkeys.json': JSON.stringify({
+          'codexian:open-view': existingHotkey,
+          'claudian:open-view': [{ modifiers: ['Mod'], key: 'N' }],
+        }),
+      },
+    });
+
+    const storage = new StorageService(plugin);
+    await storage.initialize();
+
+    const communityPlugins = JSON.parse(
+      files.get('.obsidian/community-plugins.json') || '[]'
+    ) as unknown[];
+    expect(communityPlugins).toEqual(['codexian']);
+
+    const hotkeys = JSON.parse(files.get('.obsidian/hotkeys.json') || '{}') as Record<string, unknown>;
+    expect(hotkeys['claudian:open-view']).toBeUndefined();
+    expect(hotkeys['codexian:open-view']).toEqual(existingHotkey);
+  });
+
+  it('skips plugin id migration when marker already exists', async () => {
+    const originalCommunity = ['claudian'];
+    const originalHotkeys = {
+      'claudian:open-view': [{ modifiers: ['Mod'], key: 'N' }],
+    };
+    const { plugin, files } = createMockPlugin({
+      dataJson: {},
+      initialFiles: {
+        [CLAUDIAN_PLUGIN_ID_MIGRATION_MARKER]: JSON.stringify({ version: 1 }),
+        '.obsidian/community-plugins.json': JSON.stringify(originalCommunity),
+        '.obsidian/hotkeys.json': JSON.stringify(originalHotkeys),
+      },
+    });
+
+    const storage = new StorageService(plugin);
+    await storage.initialize();
+
+    const communityPlugins = JSON.parse(
+      files.get('.obsidian/community-plugins.json') || '[]'
+    ) as unknown[];
+    expect(communityPlugins).toEqual(originalCommunity);
+
+    const hotkeys = JSON.parse(files.get('.obsidian/hotkeys.json') || '{}') as Record<string, unknown>;
+    expect(hotkeys).toEqual(originalHotkeys);
+  });
+
   it('clears data.json after successful legacy content migration', async () => {
     const command: SlashCommand = {
       id: 'cmd-review',

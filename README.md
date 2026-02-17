@@ -52,9 +52,16 @@ An Obsidian plugin that embeds Codex as an AI collaborator in your vault. Your v
 1. Install the BRAT plugin from Obsidian Community Plugins
 2. Enable BRAT in Settings → Community plugins
 3. Open BRAT settings and click "Add Beta plugin"
-4. Enter your fork/repository URL
+4. Enter `AiMarvis/codexian` (or your own fork path)
 5. Click "Add Plugin" and BRAT will install Codexian automatically
 6. Enable Codexian in Settings → Community plugins
+
+If you are migrating from legacy Claudian installs, Codexian automatically migrates:
+- `.obsidian/community-plugins.json` (`claudian` → `codexian`)
+- `.obsidian/hotkeys.json` (`claudian:*` → `codexian:*`)
+- legacy tab state from `.obsidian/plugins/claudian/data.json` (tab layout only)
+
+Do not keep both `claudian` and `codexian` enabled at the same time.
 
 > **Tip**: BRAT will automatically check for updates and notify you when a new version is available.
 

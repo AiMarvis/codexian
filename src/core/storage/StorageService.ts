@@ -52,6 +52,7 @@ import {
   convertEnvObjectToString,
   mergeEnvironmentVariables,
 } from './migrationConstants';
+import { runLegacyPluginIdMigrationOnce } from './LegacyPluginIdMigration';
 import { SESSIONS_PATH, SessionStorage } from './SessionStorage';
 import { SKILLS_PATH, SkillStorage } from './SkillStorage';
 import { COMMANDS_PATH, SlashCommandStorage } from './SlashCommandStorage';
@@ -63,6 +64,7 @@ export const CODEXIAN_PATH = '.codexian';
 export const CLAUDE_PATH = CODEXIAN_PATH;
 export const LEGACY_CLAUDE_PATH = '.claude';
 export const CLAUDE_TO_CODEX_MIGRATION_MARKER = `${CODEXIAN_PATH}/migrations/claude-to-codex-v1.json`;
+const LEGACY_CLAUDIAN_PLUGIN_DATA_PATH = '.obsidian/plugins/claudian/data.json';
 
 /** Legacy settings path (now CC settings). */
 export const SETTINGS_PATH = CC_SETTINGS_PATH;
@@ -152,6 +154,11 @@ export class StorageService {
     await this.ensureDirectories();
 
     try {
+      const pluginIdMigration = await runLegacyPluginIdMigrationOnce(this.adapter);
+      if (pluginIdMigration.warnings.length > 0) {
+        const warningText = pluginIdMigration.warnings.join('; ');
+        new Notice(`Codexian legacy plugin migration skipped entries: ${warningText}`);
+      }
       await this.migrateLegacyClaudeDataOnce();
       await this.runMigrations();
     } catch (error) {
@@ -677,10 +684,39 @@ export class StorageService {
   async getTabManagerState(): Promise<TabManagerPersistedState | null> {
     try {
       const data = await this.plugin.loadData();
-      if (data?.tabManagerState) {
-        return this.validateTabManagerState(data.tabManagerState);
+      const dataRecord = data && typeof data === 'object'
+        ? data as Record<string, unknown>
+        : null;
+      const currentState = this.validateTabManagerState(dataRecord?.tabManagerState);
+      if (currentState) {
+        return currentState;
       }
+
+      const legacyState = await this.getLegacyClaudianTabManagerState();
+      if (!legacyState) {
+        return null;
+      }
+
+      await this.plugin.saveData({
+        ...(dataRecord ?? {}),
+        tabManagerState: legacyState,
+      });
+
+      return legacyState;
+    } catch {
       return null;
+    }
+  }
+
+  private async getLegacyClaudianTabManagerState(): Promise<TabManagerPersistedState | null> {
+    if (!(await this.adapter.exists(LEGACY_CLAUDIAN_PLUGIN_DATA_PATH))) {
+      return null;
+    }
+
+    try {
+      const content = await this.adapter.read(LEGACY_CLAUDIAN_PLUGIN_DATA_PATH);
+      const parsed = JSON.parse(content) as Record<string, unknown>;
+      return this.validateTabManagerState(parsed?.tabManagerState);
     } catch {
       return null;
     }

@@ -359,7 +359,12 @@ export default class ClaudianPlugin extends Plugin {
     const backfilledConversations = this.backfillConversationResponseTimestamps();
 
     this.runtimeEnvironmentVariables = this.settings.environmentVariables || '';
-    const { changed, invalidatedConversations } = this.reconcileModelWithEnvironment(this.runtimeEnvironmentVariables);
+    const reconcileResult = this.reconcileModelWithEnvironment(this.runtimeEnvironmentVariables);
+    let changed = reconcileResult.changed;
+    const invalidatedConversations = reconcileResult.invalidatedConversations;
+    if (this.normalizeSelectedModel(this.runtimeEnvironmentVariables)) {
+      changed = true;
+    }
 
     if (changed || didMigrateCliPath) {
       await this.saveSettings();
@@ -512,6 +517,30 @@ export default class ClaudianPlugin extends Plugin {
       return envPreferred;
     }
     return customModels[0].value;
+  }
+
+  private normalizeSelectedModel(envText: string): boolean {
+    const envVars = parseEnvironmentVariables(envText || '');
+    const customModels = getModelsFromEnvironment(envVars);
+    const availableModelValues = customModels.length > 0
+      ? customModels.map((model) => model.value)
+      : this.getDefaultModelValues();
+
+    if (availableModelValues.includes(this.settings.model)) {
+      return false;
+    }
+
+    if (customModels.length > 0) {
+      const preferredModel = this.getPreferredCustomModel(envVars, customModels);
+      this.settings.model = preferredModel;
+      this.settings.lastCustomModel = preferredModel;
+      return true;
+    }
+
+    const fallbackModel = DEFAULT_CLAUDE_MODELS[0].value;
+    this.settings.model = fallbackModel;
+    this.settings.lastClaudeModel = fallbackModel;
+    return true;
   }
 
   /** Computes a hash of model and provider base URL environment variables for change detection. */

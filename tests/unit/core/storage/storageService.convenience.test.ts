@@ -481,6 +481,54 @@ describe('StorageService convenience methods', () => {
       const result = await storage.getTabManagerState();
       expect(result).toBeNull();
     });
+
+    it('loads tabManagerState from legacy claudian plugin data when current state is missing', async () => {
+      const legacyState = {
+        openTabs: [{ tabId: 'legacy-tab', conversationId: 'legacy-conv' }],
+        activeTabId: 'legacy-tab',
+      };
+      const { plugin } = createMockPlugin({
+        dataJson: { existingKey: 'keep' },
+        initialFiles: {
+          '.obsidian/plugins/claudian/data.json': JSON.stringify({
+            tabManagerState: legacyState,
+          }),
+        },
+      });
+      const storage = new StorageService(plugin);
+
+      const result = await storage.getTabManagerState();
+
+      expect(result).toEqual(legacyState);
+      expect(plugin.saveData).toHaveBeenCalledWith({
+        existingKey: 'keep',
+        tabManagerState: legacyState,
+      });
+    });
+
+    it('does not overwrite existing tabManagerState with legacy claudian plugin data', async () => {
+      const currentState = {
+        openTabs: [{ tabId: 'current-tab', conversationId: 'current-conv' }],
+        activeTabId: 'current-tab',
+      };
+      const { plugin } = createMockPlugin({
+        dataJson: { tabManagerState: currentState },
+        initialFiles: {
+          '.obsidian/plugins/claudian/data.json': JSON.stringify({
+            tabManagerState: {
+              openTabs: [{ tabId: 'legacy-tab', conversationId: 'legacy-conv' }],
+              activeTabId: 'legacy-tab',
+            },
+          }),
+        },
+      });
+      const storage = new StorageService(plugin);
+
+      const result = await storage.getTabManagerState();
+
+      expect(result).toEqual(currentState);
+      expect(plugin.saveData).not.toHaveBeenCalled();
+    });
   });
 
   describe('setTabManagerState', () => {
