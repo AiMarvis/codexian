@@ -18,8 +18,8 @@ import type { App, Plugin } from 'obsidian';
 import { Notice } from 'obsidian';
 
 import type {
-  CCPermissions,
   CCSettings,
+  CCPermissions,
   ClaudeModel,
   Conversation,
   LegacyPermission,
@@ -28,6 +28,7 @@ import type {
 import {
   createPermissionRule,
   DEFAULT_CC_PERMISSIONS,
+  DEFAULT_CC_SETTINGS,
   DEFAULT_SETTINGS,
   legacyPermissionsToCCPermissions,
 } from '../types';
@@ -149,13 +150,67 @@ export class StorageService {
 
   async initialize(): Promise<CombinedSettings> {
     await this.ensureDirectories();
-    await this.migrateLegacyClaudeDataOnce();
-    await this.runMigrations();
 
-    const cc = await this.ccSettings.load();
-    const claudian = await this.claudianSettings.load();
+    try {
+      await this.migrateLegacyClaudeDataOnce();
+      await this.runMigrations();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      new Notice(`Codexian migration failed at startup: ${reason}. Continuing with defaults.`);
+    }
+
+    const cc = await this.loadCCSettingsSafe();
+    const claudian = await this.loadClaudianSettingsSafe();
 
     return { cc, claudian };
+  }
+
+  private async loadCCSettingsSafe(): Promise<CCSettings> {
+    try {
+      return await this.ccSettings.load();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      await this.preserveCorruptedSettingFile(LEGACY_CC_SETTINGS_PATH, CC_SETTINGS_PATH);
+      new Notice(`Codexian settings load failed: ${reason}. Using default CC settings for this session.`);
+      await this.ccSettings.save({ ...DEFAULT_CC_SETTINGS });
+      return { ...DEFAULT_CC_SETTINGS };
+    }
+  }
+
+  private async loadClaudianSettingsSafe(): Promise<StoredClaudianSettings> {
+    try {
+      return await this.claudianSettings.load();
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error);
+      await this.preserveCorruptedSettingFile(LEGACY_CLAUDIAN_SETTINGS_PATH, CLAUDIAN_SETTINGS_PATH);
+      new Notice(`Codexian plugin settings load failed: ${reason}. Using default plugin settings for this session.`);
+      const { slashCommands: _slashCommands, ...defaults } = DEFAULT_SETTINGS;
+      const fallback: StoredClaudianSettings = {
+        ...defaults,
+      };
+      await this.claudianSettings.save(fallback);
+      return fallback;
+    }
+  }
+
+  private async preserveCorruptedSettingFile(
+    legacyPath: string,
+    primaryPath: string
+  ): Promise<void> {
+    const backupSuffix = `.backup-${this.getTimestampForBackup()}`;
+    const targets = [primaryPath, legacyPath];
+
+    for (const target of targets) {
+      if (!(await this.adapter.exists(target))) {
+        continue;
+      }
+
+      try {
+        await this.adapter.rename(target, `${target}${backupSuffix}`);
+      } catch {
+        // non-blocking: keep existing file if rename fails
+      }
+    }
   }
 
   private async runMigrations(): Promise<void> {

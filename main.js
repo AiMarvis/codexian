@@ -38869,11 +38869,55 @@ var StorageService = class {
   }
   async initialize() {
     await this.ensureDirectories();
-    await this.migrateLegacyClaudeDataOnce();
-    await this.runMigrations();
-    const cc = await this.ccSettings.load();
-    const claudian = await this.claudianSettings.load();
+    try {
+      await this.migrateLegacyClaudeDataOnce();
+      await this.runMigrations();
+    } catch (error48) {
+      const reason = error48 instanceof Error ? error48.message : String(error48);
+      new import_obsidian2.Notice(`Codexian migration failed at startup: ${reason}. Continuing with defaults.`);
+    }
+    const cc = await this.loadCCSettingsSafe();
+    const claudian = await this.loadClaudianSettingsSafe();
     return { cc, claudian };
+  }
+  async loadCCSettingsSafe() {
+    try {
+      return await this.ccSettings.load();
+    } catch (error48) {
+      const reason = error48 instanceof Error ? error48.message : String(error48);
+      await this.preserveCorruptedSettingFile(LEGACY_CC_SETTINGS_PATH, CC_SETTINGS_PATH);
+      new import_obsidian2.Notice(`Codexian settings load failed: ${reason}. Using default CC settings for this session.`);
+      await this.ccSettings.save({ ...DEFAULT_CC_SETTINGS });
+      return { ...DEFAULT_CC_SETTINGS };
+    }
+  }
+  async loadClaudianSettingsSafe() {
+    try {
+      return await this.claudianSettings.load();
+    } catch (error48) {
+      const reason = error48 instanceof Error ? error48.message : String(error48);
+      await this.preserveCorruptedSettingFile(LEGACY_CLAUDIAN_SETTINGS_PATH, CLAUDIAN_SETTINGS_PATH);
+      new import_obsidian2.Notice(`Codexian plugin settings load failed: ${reason}. Using default plugin settings for this session.`);
+      const { slashCommands: _slashCommands, ...defaults } = DEFAULT_SETTINGS;
+      const fallback = {
+        ...defaults
+      };
+      await this.claudianSettings.save(fallback);
+      return fallback;
+    }
+  }
+  async preserveCorruptedSettingFile(legacyPath, primaryPath) {
+    const backupSuffix = `.backup-${this.getTimestampForBackup()}`;
+    const targets = [primaryPath, legacyPath];
+    for (const target of targets) {
+      if (!await this.adapter.exists(target)) {
+        continue;
+      }
+      try {
+        await this.adapter.rename(target, `${target}${backupSuffix}`);
+      } catch (e) {
+      }
+    }
   }
   async runMigrations() {
     const ccExists = await this.ccSettings.exists();
